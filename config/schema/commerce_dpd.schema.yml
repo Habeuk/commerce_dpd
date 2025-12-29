@@ -1,0 +1,46 @@
+commerce_dpd.settings:
+  type: config_object
+  label: 'Commerce DPD configuration'
+  mapping:
+    mode:
+      type: string
+      label: 'Mode'
+    sandbox_delis_id:
+      type: string
+      label: 'Sandbox Delis ID'
+    sandbox_password:
+      type: string
+      label: 'Sandbox Password'
+    production_delis_id:
+      type: string
+      label: 'Production Delis ID'
+    production_password:
+      type: string
+      label: 'Production Password'
+    default_weight:
+      type: float
+      label: 'Default package weight (kg)'
+    default_package_height:
+      type: integer
+      label: 'Default package height (cm)'
+    default_package_width:
+      type: integer
+      label: 'Default package width (cm)'
+    default_package_depth:
+      type: integer
+      label: 'Default package depth (cm)'
+    sender_company:
+      type: string
+      label: 'Sender company name'
+    sender_street:
+      type: string
+      label: 'Sender street'
+    sender_city:
+      type: string
+      label: 'Sender city'
+    sender_postal_code:
+      type: string
+      label: 'Sender postal code'
+    sender_country:
+      type: string
+      label: 'Sender country code'

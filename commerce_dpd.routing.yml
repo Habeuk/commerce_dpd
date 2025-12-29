@@ -1,0 +1,90 @@
+# Configuration admin principale
+commerce_dpd.settings_form:
+  path: '/admin/commerce/config/dpd'
+  defaults:
+    _form: '\Drupal\commerce_dpd\Form\DpdSettingsForm'
+    _title: 'DPD Configuration'
+  requirements:
+    _permission: 'administer commerce_dpd settings'
+  options:
+    _admin_route: TRUE
+
+# Page de gestion des envois DPD (liste)
+commerce_dpd.shipments:
+  path: '/admin/commerce/orders/dpd-shipments'
+  defaults:
+    _controller: '\Drupal\commerce_dpd\Controller\DpdAdminController::shipmentsList'
+    _title: 'DPD Shipments'
+  requirements:
+    _permission: 'generate dpd labels'
+  options:
+    _admin_route: TRUE
+
+# Page de génération manuelle d'étiquettes
+commerce_dpd.generate_label:
+  path: '/admin/commerce/orders/{commerce_order}/dpd-label'
+  defaults:
+    _form: '\Drupal\commerce_dpd\Form\DpdShipmentForm'
+    _title: 'Generate DPD Label'
+  requirements:
+    _permission: 'generate dpd labels'
+    _entity_access: 'commerce_order.view'
+  options:
+    _admin_route: TRUE
+    parameters:
+      commerce_order:
+        type: entity:commerce_order
+
+# Téléchargement d'étiquette existante
+commerce_dpd.download_label:
+  path: '/admin/commerce/orders/{commerce_order}/dpd-label/download/{shipment_id}'
+  defaults:
+    _controller: '\Drupal\commerce_dpd\Controller\DpdAdminController::downloadLabel'
+    _title: 'Download DPD Label'
+  requirements:
+    _permission: 'generate dpd labels'
+    _entity_access: 'commerce_order.view'
+  options:
+    _admin_route: TRUE
+    parameters:
+      commerce_order:
+        type: entity:commerce_order
+      shipment_id:
+        type: integer
+
+# Test de connexion API DPD
+commerce_dpd.test_connection:
+  path: '/admin/commerce/config/dpd/test'
+  defaults:
+    _controller: '\Drupal\commerce_dpd\Controller\DpdAdminController::testConnection'
+    _title: 'Test DPD Connection'
+  requirements:
+    _permission: 'administer commerce_dpd settings'
+  options:
+    _admin_route: TRUE
+
+# Vérification des points relais
+commerce_dpd.find_parcelshops:
+  path: '/admin/commerce/config/dpd/parcelshops'
+  defaults:
+    _form: '\Drupal\commerce_dpd\Form\DpdParcelshopTestForm'
+    _title: 'Find DPD Parcelshops'
+  requirements:
+    _permission: 'administer commerce_dpd settings'
+  options:
+    _admin_route: TRUE
+
+# Logs et diagnostics DPD
+commerce_dpd.logs:
+  path: '/admin/commerce/config/dpd/logs'
+  defaults:
+    _controller: '\Drupal\commerce_dpd\Controller\DpdAdminController::viewLogs'
+    _title: 'DPD Logs'
+  requirements:
+    _permission: 'administer commerce_dpd settings'
+  options:
+    _admin_route: TRUE
+    parameters:
+      type:
+        type: string
+        optional: TRUE

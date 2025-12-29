@@ -1,0 +1,6 @@
+services:
+  commerce_dpd.auth_token_manager:
+    class: Drupal\commerce_dpd\Service\DpdAuthTokenManager
+
+  commerce_dpd.api_client:
+    class: Drupal\commerce_dpd\ApiClient\DpdApiClient

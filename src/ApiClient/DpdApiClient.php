@@ -2,216 +2,131 @@
 
 namespace Drupal\commerce_dpd\ApiClient;
 
+use Drupal\commerce_dpd\Service\DpdAuthTokenManager;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
-use Drupal\Core\StringTranslation\StringTranslationTrait;
 
 /**
- * DPD API Client for SOAP Web Services.
+ * DPD SOAP API client.
  */
-class DpdApiClient implements DpdApiClientInterface {
-  
-  use StringTranslationTrait;
-  
-  /**
-   * The configuration factory.
-   *
-   * @var \Drupal\Core\Config\ConfigFactoryInterface
-   */
-  protected $configFactory;
-  
-  /**
-   * The logger channel.
-   *
-   * @var \Drupal\Core\Logger\LoggerChannelInterface
-   */
+final class DpdApiClient implements DpdApiClientInterface {
+  protected \SoapClient $shipmentClient;
+  protected \SoapClient $parcelShopClient;
+  protected DpdAuthTokenManager $tokenManager;
+  protected $config;
   protected $logger;
   
-  /**
-   * SOAP client for LoginService.
-   *
-   * @var \SoapClient
-   */
-  protected $loginClient;
-  
-  /**
-   * SOAP client for ShipmentService.
-   *
-   * @var \SoapClient
-   */
-  protected $shipmentClient;
-  
-  /**
-   * Authentication token.
-   *
-   * @var string
-   */
-  protected $authToken;
-  
-  /**
-   * Constructs a new DpdApiClient object.
-   */
-  public function __construct(ConfigFactoryInterface $config_factory, LoggerChannelFactoryInterface $logger_factory) {
-    $this->configFactory = $config_factory;
+  public function __construct(ConfigFactoryInterface $config_factory, LoggerChannelFactoryInterface $logger_factory, DpdAuthTokenManager $token_manager) {
+    $this->config = $config_factory->get('commerce_dpd.settings');
     $this->logger = $logger_factory->get('commerce_dpd');
-    $this->initializeClients();
-  }
-  
-  /**
-   * Initializes SOAP clients.
-   */
-  protected function initializeClients() {
-    $config = $this->configFactory->get('commerce_dpd.settings');
-    $mode = $config->get('mode');
+    $this->tokenManager = $token_manager;
     
-    $wsdl_base = ($mode === 'production') ? 'https://public-ws.dpd.com/services/' : 'https://public-ws-stage.dpd.com/services/';
+    $mode = $this->config->get('mode');
+    $base = ($mode === 'production') ? 'https://public-ws.dpd.com/services/' : 'https://public-ws-stage.dpd.com/services/';
     
-    $options = [
+    $soap_options = [
+      'trace' => TRUE,
+      'exceptions' => TRUE,
       'soap_version' => SOAP_1_1,
-      'trace' => 1,
-      'exceptions' => 1,
       'features' => SOAP_SINGLE_ELEMENT_ARRAYS
     ];
     
-    try {
-      $this->loginClient = new \SoapClient($wsdl_base . 'LoginService/V2_0/?wsdl', $options);
-      $this->shipmentClient = new \SoapClient($wsdl_base . 'ShipmentService/V3_2/?wsdl', $options);
-    }
-    catch (\SoapFault $e) {
-      $this->logger->error('Failed to initialize DPD SOAP clients: @error', [
-        '@error' => $e->getMessage()
-      ]);
-    }
+    // Shipment service (labels).
+    $this->shipmentClient = new \SoapClient($base . 'ShipmentService/V4_4/?wsdl', $soap_options);
+    
+    // ParcelShopFinder service (pickup points).
+    // NOTE: The exact service version may differ on your portal.
+    // Keep this version configurable if needed.
+    $this->parcelShopClient = new \SoapClient($base . 'ParcelShopFinderService/V5_0/?wsdl', $soap_options);
   }
   
   /**
    *
    * {@inheritdoc}
    */
-  public function authenticate(): bool {
-    $config = $this->configFactory->get('commerce_dpd.settings');
-    $mode = $config->get('mode');
-    
-    $delisId = ($mode === 'production') ? $config->get('production_delis_id') : $config->get('sandbox_delis_id');
-    
-    $password = ($mode === 'production') ? $config->get('production_password') : $config->get('sandbox_password');
-    
-    if (empty($delisId) || empty($password)) {
-      $this->logger->error('DPD credentials are not configured.');
-      return FALSE;
-    }
+  public function storeOrders(array $orders): array {
+    $payload = [
+      'auth' => [
+        'delisId' => $this->getDelisId(),
+        'authToken' => $this->tokenManager->getToken()
+      ],
+      'order' => $this->normalizeIso88591($orders)
+    ];
     
     try {
-      $params = [
-        'delisId' => $delisId,
-        'password' => $password,
-        'messageLanguage' => 'de_DE'
-      ];
-      
-      $response = $this->loginClient->getAuth($params);
-      
-      if (isset($response->return->authToken)) {
-        $this->authToken = $response->return->authToken;
-        $this->logger->info('DPD authentication successful.');
-        return TRUE;
+      return (array) $this->shipmentClient->storeOrders($payload);
+    }
+    catch (\SoapFault $e) {
+      // If token expired, refresh once and retry.
+      if ($this->isAuthExpiredFault($e)) {
+        $this->tokenManager->clear();
+        $payload['auth']['authToken'] = $this->tokenManager->getToken();
+        return (array) $this->shipmentClient->storeOrders($payload);
       }
-    }
-    catch (\SoapFault $e) {
-      $this->logger->error('DPD authentication failed: @error', [
-        '@error' => $e->getMessage()
+      
+      $this->logger->error('DPD ShipmentService error: @msg', [
+        '@msg' => $e->getMessage()
       ]);
+      throw $e;
     }
-    
-    return FALSE;
   }
   
   /**
    *
    * {@inheritdoc}
    */
-  public function createShipment(array $shipment_data): array {
-    if (!$this->authToken && !$this->authenticate()) {
-      return [
-        'error' => $this->t('Authentication failed.')
-      ];
-    }
-    
-    try {
-      // Prepare shipment request
-      $request = [
-        'printOptions' => [
-          'printOption' => [
-            'outputFormat' => 'PDF',
-            'paperFormat' => 'A6'
-          ]
-        ],
-        'order' => [
-          'generalShipmentData' => [
-            'sendingDepot' => '0593', // Default depot, should be configurable
-            'product' => 'CL', // CL = Classic, CN = Classic with notification
-            'sender' => $shipment_data['sender'],
-            'recipient' => $shipment_data['recipient']
-          ],
-          'parcels' => [
-            'parcelLabelNumber' => 1,
-            'weight' => $shipment_data['weight'] * 1000 // Convert kg to g
+  public function findParcelShops(array $criteria): array {
+    // Mandatory fields recommended by DPD guidelines:
+    // address + limit=10 + availabilityDate + hideClosed=true + searchCountry
+    // and service code 100 (ParcelShop) / 901 (Pickup station) filters.
+    // :contentReference[oaicite:1]{index=1}
+    $defaults = [
+      'limit' => 10,
+      'hideClosed' => TRUE,
+      'availabilityDate' => (new \DateTimeImmutable('now'))->format('Y-m-d'),
+      'searchCountry' => $criteria['searchCountry'] ?? 'DE',
+      'country' => $criteria['country'] ?? 'DE',
+      'services' => [
+        'service' => [
+          [
+            'code' => 100, // ParcelShops
+            'available' => TRUE
           ]
         ]
-      ];
-      
-      // Add parcelshop ID if selected
-      if (!empty($shipment_data['parcelshop_id'])) {
-        $request['order']['parcels']['parcelShopId'] = $shipment_data['parcelshop_id'];
-      }
-      
-      $response = $this->shipmentClient->storeOrders([
-        'auth' => [
-          'delisId' => $this->getDelisId(),
-          'authToken' => $this->authToken
-        ],
-        'order' => $request
-      ]);
-      
-      if (isset($response->orderResult->parcellabelsPDF)) {
-        return [
-          'success' => TRUE,
-          'tracking_number' => $response->orderResult->shipmentResponses->parcelInformation->parcelLabelNumber,
-          'label_pdf' => base64_decode($response->orderResult->parcellabelsPDF)
-        ];
-      }
+      ]
+    ];
+    
+    // Merge + normalize.
+    $request = array_replace_recursive($defaults, $criteria);
+    $request = $this->normalizeIso88591($request);
+    
+    $payload = [
+      'auth' => [
+        'delisId' => $this->getDelisId(),
+        'authToken' => $this->tokenManager->getToken()
+      ]
+    ] + $request;
+    
+    try {
+      // Operation name is typically "findParcelShops".
+      // Some WSDLs wrap parameters differently; if you get a SOAP fault,
+      // we'll adjust the payload shape to match your WSDL exactly.
+      $response = $this->parcelShopClient->findParcelShops($payload);
+      return (array) $response;
     }
     catch (\SoapFault $e) {
-      $this->logger->error('DPD shipment creation failed: @error', [
-        '@error' => $e->getMessage()
+      if ($this->isAuthExpiredFault($e)) {
+        $this->tokenManager->clear();
+        $payload['auth']['authToken'] = $this->tokenManager->getToken();
+        $response = $this->parcelShopClient->findParcelShops($payload);
+        return (array) $response;
+      }
+      
+      $this->logger->error('DPD ParcelShopFinder error: @msg', [
+        '@msg' => $e->getMessage()
       ]);
-      return [
-        'error' => $e->getMessage()
-      ];
+      throw $e;
     }
-    
-    return [
-      'error' => $this->t('Unknown error creating shipment.')
-    ];
-  }
-  
-  /**
-   *
-   * {@inheritdoc}
-   */
-  public function getParcelshops(string $zip_code, string $country = 'DE'): array {
-    // Note: This requires DPD's ParcelShopFinder API
-    // Implementation depends on available API endpoints
-    return [];
-  }
-  
-  /**
-   * Gets the current DelisId based on mode.
-   */
-  protected function getDelisId(): string {
-    $config = $this->configFactory->get('commerce_dpd.settings');
-    $mode = $config->get('mode');
-    
-    return ($mode === 'production') ? $config->get('production_delis_id') : $config->get('sandbox_delis_id');
   }
   
   /**
@@ -219,6 +134,9 @@ class DpdApiClient implements DpdApiClientInterface {
    * {@inheritdoc}
    */
   public function getLastRequest(): string {
+    // If you want, you can add a parameter to choose shipment vs parcelShop.
+    // Here we return the last request for whichever client was used last
+    // (SOAP keeps its own last request per client).
     return $this->shipmentClient->__getLastRequest();
   }
   
@@ -228,5 +146,30 @@ class DpdApiClient implements DpdApiClientInterface {
    */
   public function getLastResponse(): string {
     return $this->shipmentClient->__getLastResponse();
+  }
+  
+  protected function getDelisId(): string {
+    return $this->config->get($this->config->get('mode') === 'production' ? 'production_delis_id' : 'sandbox_delis_id');
+  }
+  
+  /**
+   * Converts UTF-8 strings to ISO-8859-1 as required by DPD for address data.
+   * :contentReference[oaicite:2]{index=2}
+   */
+  protected function normalizeIso88591(array $data): array {
+    array_walk_recursive($data, function (&$value) {
+      if (is_string($value)) {
+        $value = iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $value);
+      }
+    });
+    return $data;
+  }
+  
+  /**
+   * Checks whether the SOAP fault indicates an expired/invalid token.
+   */
+  protected function isAuthExpiredFault(\SoapFault $e): bool {
+    $msg = $e->getMessage();
+    return str_contains($msg, 'LOGIN_5') || str_contains($msg, 'LOGIN_6');
   }
 }

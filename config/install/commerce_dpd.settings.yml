@@ -1,0 +1,14 @@
+mode: 'sandbox'
+sandbox_delis_id: ''
+sandbox_password: ''
+production_delis_id: ''
+production_password: ''
+default_weight: 2.0
+default_package_height: 20
+default_package_width: 30
+default_package_depth: 10
+sender_company: 'My Salon'
+sender_street: 'Main Street 123'
+sender_city: 'Berlin'
+sender_postal_code: '10115'
+sender_country: 'DE'
