@@ -19,6 +19,17 @@ commerce_dpd.shipments:
     _permission: 'generate dpd labels'
   options:
     _admin_route: TRUE
+	
+# Route de recherche DPD (avec paramètre optionnel)
+commerce_dpd.shipments_search:
+  path: '/admin/commerce/orders/dpd-shipments/search'
+  defaults:
+    _form: '\Drupal\commerce_dpd\Form\DpdShipmentSearchForm'
+    _title: 'Search DPD Shipments'
+  requirements:
+    _permission: 'generate dpd labels'
+  options:
+    _admin_route: TRUE
 
 # Page de génération manuelle d'étiquettes
 commerce_dpd.generate_label:
@@ -88,3 +99,30 @@ commerce_dpd.logs:
       type:
         type: string
         optional: TRUE
+        
+commerce_dpd.export_shipments:
+  path: '/admin/commerce/orders/dpd-shipments/export'
+  defaults:
+    _controller: '\Drupal\commerce_dpd\Controller\DpdAdminController::exportShipments'
+    _title: 'Export DPD Shipments'
+  requirements:
+    _permission: 'generate dpd labels'
+  options:
+    _admin_route: TRUE
+
+# Resend notification route
+commerce_dpd.resend_notification:
+  path: '/admin/commerce/orders/{commerce_order}/dpd-notification/{shipment_id}'
+  defaults:
+    _controller: '\Drupal\commerce_dpd\Controller\DpdAdminController::resendNotification'
+    _title: 'Resend DPD Notification'
+  requirements:
+    _permission: 'generate dpd labels'
+    _entity_access: 'commerce_order.view'
+  options:
+    _admin_route: TRUE
+    parameters:
+      commerce_order:
+        type: entity:commerce_order
+      shipment_id:
+        type: integer

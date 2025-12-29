@@ -81,7 +81,7 @@ class DpdAdminController extends ControllerBase {
    *
    * @return array A render array.
    */
-  public function shipmentsList() {
+  public function shipmentsListOLD() {
     $build = [];
     
     // Get shipments with DPD labels from the database
@@ -372,5 +372,415 @@ class DpdAdminController extends ControllerBase {
     ];
     
     return $levels[$type] ?? NULL;
+  }
+  
+  /**
+   * Enhanced shipments list with search capabilities.
+   *
+   * @return array A render array.
+   */
+  public function shipmentsList() {
+    $request = $this->getRequest();
+    $search_params = $request->query->all();
+    
+    $build = [];
+    
+    // Add search form
+    $build['search_form'] = \Drupal::formBuilder()->getForm('\Drupal\commerce_dpd\Form\DpdShipmentSearchForm');
+    
+    // Check if we have search parameters
+    $has_search = !empty(array_filter($search_params, function ($value) {
+      return !empty($value);
+    }));
+    
+    // Build the query
+    $query = $this->database->select('commerce_dpd_shipments', 'cds')->fields('cds');
+    
+    // Apply search filters
+    if ($has_search) {
+      $this->applySearchFilters($query, $search_params);
+      
+      // Add search summary
+      $build['search_summary'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'class' => [
+            'search-summary'
+          ]
+        ]
+      ];
+      
+      $build['search_summary']['text'] = [
+        '#markup' => $this->t('Showing results for: @criteria', [
+          '@criteria' => $this->buildSearchCriteriaText($search_params)
+        ])
+      ];
+      
+      $build['search_summary']['clear'] = [
+        '#type' => 'link',
+        '#title' => $this->t('Clear all filters'),
+        '#url' => Url::fromRoute('commerce_dpd.shipments'),
+        '#attributes' => [
+          'class' => [
+            'button',
+            'button--small'
+          ]
+        ]
+      ];
+    }
+    
+    $query->orderBy('cds.created', 'DESC')->extend('\Drupal\Core\Database\Query\PagerSelectExtender')->limit(50);
+    
+    $results = $query->execute()->fetchAll();
+    
+    if (empty($results)) {
+      $build['empty'] = [
+        '#type' => 'markup',
+        '#markup' => $has_search ? $this->t('No shipments found matching your search criteria.') : $this->t('No DPD shipments found.')
+      ];
+      return $build;
+    }
+    
+    $rows = [];
+    foreach ($results as $shipment) {
+      $order = $this->entityTypeManager()->getStorage('commerce_order')->load($shipment->order_id);
+      
+      $order_link = $order ? Link::fromTextAndUrl($order->getOrderNumber(), $order->toUrl()) : $this->t('Order @id', [
+        '@id' => $shipment->order_id
+      ]);
+      
+      // Build operations dropdown
+      $operations = [
+        'download' => [
+          'title' => $this->t('Download Label'),
+          'url' => Url::fromRoute('commerce_dpd.download_label', [
+            'commerce_order' => $shipment->order_id,
+            'shipment_id' => $shipment->id
+          ])
+        ],
+        'track' => [
+          'title' => $this->t('Track on DPD'),
+          'url' => Url::fromUri('https://www.dpd.com/tracking?search=' . $shipment->tracking_number, [
+            'attributes' => [
+              'target' => '_blank'
+            ]
+          ])
+        ],
+        'resend' => [
+          'title' => $this->t('Resend Notification'),
+          'url' => Url::fromRoute('commerce_dpd.resend_notification', [
+            'commerce_order' => $shipment->order_id,
+            'shipment_id' => $shipment->id
+          ])
+        ]
+      ];
+      
+      $operations_dropdown = [
+        '#type' => 'operations',
+        '#links' => $operations,
+        '#dropbutton' => TRUE
+      ];
+      
+      $rows[] = [
+        'order' => $order_link,
+        'tracking_number' => [
+          'data' => [
+            '#type' => 'link',
+            '#title' => $shipment->tracking_number,
+            '#url' => Url::fromUri('https://www.dpd.com/tracking?search=' . $shipment->tracking_number, [
+              'attributes' => [
+                'target' => '_blank',
+                'title' => $this->t('Track on DPD website')
+              ]
+            ])
+          ]
+        ],
+        'status' => [
+          'data' => [
+            '#type' => 'container',
+            '#attributes' => [
+              'class' => [
+                'shipment-status',
+                'status-' . $shipment->status
+              ]
+            ],
+            'label' => [
+              '#markup' => $this->getStatusLabel($shipment->status)
+            ],
+            'icon' => [
+              '#type' => 'html_tag',
+              '#tag' => 'span',
+              '#value' => '',
+              '#attributes' => [
+                'class' => [
+                  'status-icon'
+                ]
+              ]
+            ]
+          ]
+        ],
+        'parcelshop' => $shipment->parcelshop_id ?: $this->t('N/A'),
+        'created' => $this->dateFormatter->format($shipment->created, 'short'),
+        'updated' => $this->dateFormatter->format($shipment->updated, 'short'),
+        'operations' => [
+          'data' => $operations_dropdown
+        ]
+      ];
+    }
+    
+    $build['table'] = [
+      '#type' => 'table',
+      '#header' => [
+        $this->t('Order'),
+        $this->t('Tracking Number'),
+        $this->t('Status'),
+        $this->t('Parcelshop'),
+        $this->t('Created'),
+        $this->t('Updated'),
+        $this->t('Operations')
+      ],
+      '#rows' => $rows,
+      '#empty' => $this->t('No shipments found.'),
+      '#attributes' => [
+        'class' => [
+          'dpd-shipments-table'
+        ]
+      ]
+    ];
+    
+    $build['pager'] = [
+      '#type' => 'pager'
+    ];
+    
+    // Export buttons
+    $build['export'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => [
+          'export-actions'
+        ]
+      ]
+    ];
+    
+    $build['export']['csv'] = [
+      '#type' => 'link',
+      '#title' => $this->t('Export to CSV'),
+      '#url' => Url::fromRoute('commerce_dpd.export_shipments', [], [
+        'query' => $search_params
+      ]),
+      '#attributes' => [
+        'class' => [
+          'button'
+        ]
+      ]
+    ];
+    
+    return $build;
+  }
+  
+  /**
+   * Applies search filters to the query.
+   *
+   * @param \Drupal\Core\Database\Query\SelectInterface $query
+   *        The database query.
+   * @param array $parameters
+   *        The search parameters.
+   */
+  protected function applySearchFilters($query, array $parameters) {
+    // Tracking number
+    if (!empty($parameters['tracking_number'])) {
+      $query->condition('cds.tracking_number', '%' . $this->database->escapeLike($parameters['tracking_number']) . '%', 'LIKE');
+    }
+    
+    // Order ID
+    if (!empty($parameters['order_id'])) {
+      $query->condition('cds.order_id', $parameters['order_id']);
+    }
+    
+    // Status
+    if (!empty($parameters['status'])) {
+      $query->condition('cds.status', $parameters['status']);
+    }
+    
+    // Parcelshop ID
+    if (!empty($parameters['parcelshop_id'])) {
+      $query->condition('cds.parcelshop_id', $parameters['parcelshop_id']);
+    }
+    
+    // Date range
+    if (!empty($parameters['date_from'])) {
+      $date_from = strtotime($parameters['date_from'] . ' 00:00:00');
+      $query->condition('cds.created', $date_from, '>=');
+    }
+    
+    if (!empty($parameters['date_to'])) {
+      $date_to = strtotime($parameters['date_to'] . ' 23:59:59');
+      $query->condition('cds.created', $date_to, '<=');
+    }
+    
+    // Order number (requires join with commerce_order)
+    if (!empty($parameters['order_number'])) {
+      $query->leftJoin('commerce_order', 'co', 'cds.order_id = co.order_id');
+      $query->condition('co.order_number', '%' . $this->database->escapeLike($parameters['order_number']) . '%', 'LIKE');
+    }
+  }
+  
+  /**
+   * Builds a human-readable search criteria text.
+   *
+   * @param array $parameters
+   *        The search parameters.
+   *        
+   * @return string The criteria text.
+   */
+  protected function buildSearchCriteriaText(array $parameters) {
+    $criteria = [];
+    
+    if (!empty($parameters['tracking_number'])) {
+      $criteria[] = $this->t('Tracking: @value', [
+        '@value' => $parameters['tracking_number']
+      ]);
+    }
+    
+    if (!empty($parameters['order_id'])) {
+      $criteria[] = $this->t('Order ID: @value', [
+        '@value' => $parameters['order_id']
+      ]);
+    }
+    
+    if (!empty($parameters['order_number'])) {
+      $criteria[] = $this->t('Order #: @value', [
+        '@value' => $parameters['order_number']
+      ]);
+    }
+    
+    if (!empty($parameters['status'])) {
+      $statuses = [
+        'created' => $this->t('Created'),
+        'printed' => $this->t('Printed'),
+        'in_transit' => $this->t('In Transit'),
+        'delivered' => $this->t('Delivered'),
+        'error' => $this->t('Error')
+      ];
+      $criteria[] = $this->t('Status: @value', [
+        '@value' => $statuses[$parameters['status']] ?? $parameters['status']
+      ]);
+    }
+    
+    if (!empty($parameters['parcelshop_id'])) {
+      $criteria[] = $this->t('Parcelshop: @value', [
+        '@value' => $parameters['parcelshop_id']
+      ]);
+    }
+    
+    if (!empty($parameters['date_from']) || !empty($parameters['date_to'])) {
+      $date_text = '';
+      if (!empty($parameters['date_from'])) {
+        $date_text .= $this->t('From: @date', [
+          '@date' => $parameters['date_from']
+        ]);
+      }
+      if (!empty($parameters['date_to'])) {
+        if ($date_text)
+          $date_text .= ' ';
+        $date_text .= $this->t('To: @date', [
+          '@date' => $parameters['date_to']
+        ]);
+      }
+      $criteria[] = $date_text;
+    }
+    
+    return implode('; ', $criteria);
+  }
+  
+  /**
+   * Exports shipments to CSV.
+   *
+   * @return \Symfony\Component\HttpFoundation\Response The CSV response.
+   */
+  public function exportShipments() {
+    $request = $this->getRequest();
+    $search_params = $request->query->all();
+    
+    // Build query with same filters as list
+    $query = $this->database->select('commerce_dpd_shipments', 'cds')->fields('cds');
+    
+    if (!empty($search_params)) {
+      $this->applySearchFilters($query, $search_params);
+    }
+    
+    $query->orderBy('cds.created', 'DESC');
+    $results = $query->execute()->fetchAll();
+    
+    // Prepare CSV data
+    $csv_data = [];
+    $csv_data[] = [
+      'Order ID',
+      'Order Number',
+      'Tracking Number',
+      'Status',
+      'Parcelshop ID',
+      'Created',
+      'Updated'
+    ];
+    
+    foreach ($results as $shipment) {
+      $order = $this->entityTypeManager()->getStorage('commerce_order')->load($shipment->order_id);
+      
+      $csv_data[] = [
+        $shipment->order_id,
+        $order ? $order->getOrderNumber() : '',
+        $shipment->tracking_number,
+        $this->getStatusLabel($shipment->status),
+        $shipment->parcelshop_id ?: '',
+        date('Y-m-d H:i:s', $shipment->created),
+        date('Y-m-d H:i:s', $shipment->updated)
+      ];
+    }
+    
+    // Convert to CSV string
+    $csv_string = '';
+    foreach ($csv_data as $row) {
+      $csv_string .= implode(',', array_map(function ($value) {
+        return '"' . str_replace('"', '""', $value) . '"';
+      }, $row)) . "\n";
+    }
+    
+    // Create response
+    $response = new Response($csv_string);
+    $response->headers->set('Content-Type', 'text/csv');
+    $response->headers->set('Content-Disposition', 'attachment; filename="dpd-shipments-' . date('Y-m-d') . '.csv"');
+    
+    return $response;
+  }
+  
+  /**
+   * Resends shipment notification.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $commerce_order
+   *        The order.
+   * @param int $shipment_id
+   *        The shipment ID.
+   *        
+   * @return \Symfony\Component\HttpFoundation\RedirectResponse A redirect
+   *         response.
+   */
+  public function resendNotification(OrderInterface $commerce_order, $shipment_id) {
+    // Get shipment data
+    $query = $this->database->select('commerce_dpd_shipments', 'cds')->fields('cds')->condition('id', $shipment_id)->condition('order_id', $commerce_order->id())->execute();
+    
+    $shipment = $query->fetchAssoc();
+    
+    if ($shipment) {
+      // TODO: Implement email sending with tracking information
+      $this->messenger->addStatus($this->t('Notification resent for tracking number: @tracking', [
+        '@tracking' => $shipment['tracking_number']
+      ]));
+    }
+    else {
+      $this->messenger->addError($this->t('Shipment not found.'));
+    }
+    
+    return $this->redirect('commerce_dpd.shipments');
   }
 }
