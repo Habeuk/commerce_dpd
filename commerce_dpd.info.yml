@@ -1,0 +1,10 @@
+name: 'Commerce DPD Shipping'
+type: module
+description: 'DPD shipping integration for Drupal Commerce'
+package: 'Commerce'
+core_version_requirement: ^10 || ^11
+dependencies:
+  - drupal:commerce_shipping
+  - drupal:commerce_checkout
+  - drupal:commerce_order
+  - drupal:commerce_store

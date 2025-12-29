@@ -1,0 +1,8 @@
+administer commerce_dpd settings:
+  title: 'Administer Commerce DPD settings'
+  description: 'Configure DPD shipping integration settings'
+  restrict access: true
+
+generate dpd labels:
+  title: 'Generate DPD labels'
+  description: 'Generate DPD shipping labels'
