@@ -86,6 +86,8 @@ final class DpdApiClient implements DpdApiClientInterface {
   
   private function generateNewToken(): string {
     try {
+      // Vérifier et incrémenter le compteur journalier
+      $this->tokenManager->incrementTokenGenerationCount();
       $response = $this->getClient()->getAuth([
         'delisId' => $this->getDelisId(),
         'password' => $this->getPassword(),
@@ -100,11 +102,23 @@ final class DpdApiClient implements DpdApiClientInterface {
         'customerUid' => $login->customerUid ?? NULL,
         'depot' => $login->depot ?? NULL
       ];
+      /**
+       * logs
+       */
+      \Stephane888\Debug\debugLog::symfonyDebug([
+        'response' => $response,
+        'login' => $login
+      ], 'DPD__getToken', true);
       
+      //
       $this->tokenManager->cacheTokenData($values);
-      $this->logger->info('DPD auth token successfully generated in "@mode"', [
-        '@mode' => $this->tokenManager->getMode()
-      ]);
+      $countToday = $this->tokenManager->getTokenGenerationCountToday();
+      $this->logger->info('DPD auth token generated in "@mode". Count today: @count/@max',
+        [
+          '@mode' => $this->tokenManager->getMode(),
+          '@count' => $countToday,
+          '@max' => \Drupal\commerce_dpd\Service\DpdAuthTokenManager::MAX_TOKENS_PER_DAY
+        ]);
       return $login->authToken;
     }
     catch (\SoapFault $e) {
@@ -114,7 +128,13 @@ final class DpdApiClient implements DpdApiClientInterface {
       ]);
       throw $e;
     }
-    catch (\Exception | \Error $e) {
+    catch (\RuntimeException $e) {
+      // Relancer les erreurs de limite sans les logger comme des erreurs
+      // techniques
+      $this->logger->warning($e->getMessage());
+      throw $e;
+    }
+    catch (\Throwable $e) {
       $this->logger->error('DPD LoginService authentication ERROR (@code): @message', [
         '@code' => $e->getCode() ?? 'UNKNOWN',
         '@message' => $e->getMessage()
