@@ -175,7 +175,6 @@ class DpdSettingsForm extends ConfigFormBase {
       '#maxlength' => 2,
       '#required' => TRUE
     ];
-    
     return parent::buildForm($form, $form_state);
   }
   
@@ -185,23 +184,28 @@ class DpdSettingsForm extends ConfigFormBase {
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
     $config = $this->config('commerce_dpd.settings');
-    
     $values = $form_state->getValues();
-    
     // Handle passwords - only update if provided
     if (!empty($values['sandbox_password'])) {
       $config->set('sandbox_password', $values['sandbox_password']);
     }
-    
     if (!empty($values['production_password'])) {
       $config->set('production_password', $values['production_password']);
     }
     
-    // Set all other values
-    $config->set('mode', $values['mode'])->set('sandbox_delis_id', $values['sandbox_delis_id'])->set('production_delis_id', $values['production_delis_id'])->set('default_weight',
-      $values['default_weight'])->set('default_package_height', $values['default_package_height'])->set('default_package_width', $values['default_package_width'])->set('default_package_depth',
-      $values['default_package_depth'])->set('sender_company', $values['sender_company'])->set('sender_street', $values['sender_street'])->set('sender_city', $values['sender_city'])->set(
-      'sender_postal_code', $values['sender_postal_code'])->set('sender_country', $values['sender_country'])->save();
+    $config->set('mode', $values['mode']);
+    $config->set('sandbox_delis_id', $values['sandbox_delis_id']);
+    $config->set('production_delis_id', $values['production_delis_id']);
+    $config->set('default_weight', $values['default_weight']);
+    $config->set('default_package_height', $values['default_package_height']);
+    $config->set('default_package_width', $values['default_package_width']);
+    $config->set('default_package_depth', $values['default_package_depth']);
+    $config->set('sender_company', $values['sender_company']);
+    $config->set('sender_street', $values['sender_street']);
+    $config->set('sender_city', $values['sender_city']);
+    $config->set('sender_postal_code', $values['sender_postal_code']);
+    $config->set('sender_country', $values['sender_country']);
+    $config->save();
     
     parent::submitForm($form, $form_state);
   }

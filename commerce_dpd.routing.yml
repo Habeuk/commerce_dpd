@@ -19,7 +19,7 @@ commerce_dpd.shipments:
     _permission: 'generate dpd labels'
   options:
     _admin_route: TRUE
-	
+
 # Route de recherche DPD (avec paramètre optionnel)
 commerce_dpd.shipments_search:
   path: '/admin/commerce/orders/dpd-shipments/search'
