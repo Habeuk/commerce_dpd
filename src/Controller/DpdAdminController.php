@@ -45,6 +45,7 @@ class DpdAdminController extends ControllerBase {
    * @var \Drupal\Core\Render\RendererInterface
    */
   protected $renderer;
+  protected $logger;
   
   /**
    * Constructs a new DpdAdminController object.
@@ -185,13 +186,11 @@ class DpdAdminController extends ControllerBase {
    */
   public function testConnection() {
     try {
-      if ($this->dpdApiClient->authenticate()) {
+      if ($this->dpdApiClient->getToken()) {
         $this->messenger->addStatus($this->t('Successfully connected to DPD API.'));
-        
         // Try to get service data as additional test
-        $last_request = $this->dpdApiClient->getLastRequest();
-        $last_response = $this->dpdApiClient->getLastResponse();
-        
+        $last_request = $this->dpdApiClient->getLastRequestClient();
+        $last_response = $this->dpdApiClient->getLastResponseClient();
         $this->logger->info('DPD connection test successful. Last request: @request, Last response: @response', [
           '@request' => $last_request,
           '@response' => $last_response
@@ -209,7 +208,6 @@ class DpdAdminController extends ControllerBase {
         '@error' => $e->getMessage()
       ]);
     }
-    
     return $this->redirect('commerce_dpd.settings_form');
   }
   

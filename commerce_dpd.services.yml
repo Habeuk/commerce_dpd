@@ -1,6 +1,14 @@
 services:
   commerce_dpd.auth_token_manager:
     class: Drupal\commerce_dpd\Service\DpdAuthTokenManager
+    arguments:
+      - '@config.factory'
+      - '@keyvalue'
+      - '@logger.factory'
+      - '@datetime.time'
 
   commerce_dpd.api_client:
     class: Drupal\commerce_dpd\ApiClient\DpdApiClient
+    arguments:
+      - '@logger.factory'
+      - '@commerce_dpd.auth_token_manager'

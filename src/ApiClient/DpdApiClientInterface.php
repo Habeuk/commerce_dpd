@@ -22,6 +22,13 @@ namespace Drupal\commerce_dpd\ApiClient;
 interface DpdApiClientInterface {
   
   /**
+   * Return token
+   *
+   * @return string
+   */
+  public function getToken(): string;
+  
+  /**
    * Sends shipment orders to DPD and generates shipping labels.
    *
    * This method calls the DPD ShipmentService (storeOrders).
@@ -73,7 +80,7 @@ interface DpdApiClientInterface {
    *
    * @return string Raw SOAP XML request.
    */
-  public function getLastRequest(): string;
+  public function getLastRequestShipmentClient(): string|null;
   
   /**
    * Returns the last SOAP response XML received from the DPD API.
@@ -84,5 +91,5 @@ interface DpdApiClientInterface {
    *
    * @return string Raw SOAP XML response.
    */
-  public function getLastResponse(): string;
+  public function getLastResponseShipmentClient(): string|null;
 }
