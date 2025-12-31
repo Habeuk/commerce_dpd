@@ -12,7 +12,7 @@ use Drupal\Component\Datetime\TimeInterface;
  *
  * Conforms to LoginService-Public_2_0 specification.
  */
-final class DpdAuthTokenManager {
+final class DpdAuthTokenManager implements DpdAuthTokenManagerInterface {
   private const STORE_KEY = 'dpd_auth';
   private const TOKEN_MAX_AGE = 86340; // 23h59 en secondes
   private const TOKEN_GENERATION_COUNT_KEY = 'dpd_token_generation_count';

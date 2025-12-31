@@ -2,8 +2,7 @@
 
 namespace Drupal\commerce_dpd\ApiClient;
 
-use Drupal\commerce_dpd\Service\DpdAuthTokenManager;
-use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\commerce_dpd\Service\DpdAuthTokenManagerInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 
 /**
@@ -13,10 +12,10 @@ final class DpdApiClient implements DpdApiClientInterface {
   protected \SoapClient $shipmentClient;
   protected \SoapClient $parcelShopClient;
   protected \SoapClient $client;
-  protected DpdAuthTokenManager $tokenManager;
+  protected DpdAuthTokenManagerInterface $tokenManager;
   protected $logger;
   
-  public function __construct(LoggerChannelFactoryInterface $logger_factory, DpdAuthTokenManager $token_manager) {
+  public function __construct(LoggerChannelFactoryInterface $logger_factory, DpdAuthTokenManagerInterface $token_manager) {
     $this->logger = $logger_factory->get('commerce_dpd');
     $this->tokenManager = $token_manager;
   }
