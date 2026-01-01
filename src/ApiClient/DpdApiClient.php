@@ -101,14 +101,6 @@ final class DpdApiClient implements DpdApiClientInterface {
         'customerUid' => $login->customerUid ?? NULL,
         'depot' => $login->depot ?? NULL
       ];
-      /**
-       * logs
-       */
-      \Stephane888\Debug\debugLog::symfonyDebug([
-        'response' => $response,
-        'login' => $login
-      ], 'DPD__getToken', true);
-      
       //
       $this->tokenManager->cacheTokenData($values);
       $countToday = $this->tokenManager->getTokenGenerationCountToday();

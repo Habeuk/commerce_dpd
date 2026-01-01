@@ -41,7 +41,6 @@ final class DpdAuthTokenManager implements DpdAuthTokenManagerInterface {
    */
   public function getCachedTokenData(): ?array {
     $data = $this->store->get(self::STORE_KEY);
-    \Stephane888\Debug\debugLog::symfonyDebug($data, 'DPD__getCachedTokenData', true);
     if (!$data || !isset($data['authToken'])) {
       return null;
     }
