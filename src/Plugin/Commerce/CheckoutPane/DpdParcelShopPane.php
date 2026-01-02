@@ -75,7 +75,7 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
           'country' => $address->getCountryCode(),
           'zipCode' => $address->getPostalCode(),
           'city' => $address->getLocality(),
-          'street' => $address->getAddressLine1(),
+          // 'street' => $address->getAddressLine1(),
           'limit' => 10,
           'hideClosed' => TRUE
         ];

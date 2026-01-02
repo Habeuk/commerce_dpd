@@ -30,6 +30,12 @@ final class DpdApiClient implements DpdApiClientInterface {
   private function getParcelShopClient(): \SoapClient {
     if (!isset($this->parcelShopClient))
       $this->initializeSoapClients();
+    // à chaque requette on reconstruit l'authentification, car le token peut
+    // expirer.
+    $this->parcelShopClient->__setSoapHeaders([
+      $this->buildAuthHeader()
+    ]);
+    
     return $this->parcelShopClient;
   }
   
@@ -67,6 +73,14 @@ final class DpdApiClient implements DpdApiClientInterface {
       'soap_version' => SOAP_1_1,
       'exceptions' => TRUE,
       'trace' => TRUE
+    ]);
+  }
+  
+  private function buildAuthHeader(): \SoapHeader {
+    return new \SoapHeader('http://dpd.com/common/service/types/Authentication/2.0', 'authentication', [
+      'delisId' => $this->getDelisId(),
+      'authToken' => $this->getToken(),
+      'messageLanguage' => 'de_DE'
     ]);
   }
   
@@ -154,7 +168,7 @@ final class DpdApiClient implements DpdApiClientInterface {
       // If token expired, refresh once and retry.
       if ($this->isAuthExpiredFault($e)) {
         $this->tokenManager->clear();
-        $payload['auth']['authToken'] = $this->getToken();
+        //
         return (array) $this->getShipmentClient()->storeOrders($payload);
       }
       
@@ -170,52 +184,34 @@ final class DpdApiClient implements DpdApiClientInterface {
    * {@inheritdoc}
    */
   public function findParcelShops(array $criteria): array {
-    // Mandatory fields recommended by DPD guidelines:
-    // address + limit=10 + availabilityDate + hideClosed=true + searchCountry
-    // and service code 100 (ParcelShop) / 901 (Pickup station) filters.
-    // :contentReference[oaicite:1]{index=1}
-    $defaults = [
+    $request = $criteria + [
       'limit' => 10,
       'hideClosed' => TRUE,
-      'availabilityDate' => (new \DateTimeImmutable('now'))->format('Y-m-d'),
-      'searchCountry' => $criteria['searchCountry'] ?? 'DE',
-      'country' => $criteria['country'] ?? 'DE',
+      'availabilityDate' => (new \DateTimeImmutable('now'))->format('Y-m-d H:i'),
+      'country' => 'DE',
       'services' => [
         'service' => [
           [
-            'code' => 100, // ParcelShops
+            'code' => '100', // ParcelShops - chaîne de 3 caractères
             'available' => TRUE
           ]
         ]
       ]
     ];
+    $payload = $this->normalizeIso88591($request);
     
-    // Merge + normalize.
-    $request = array_replace_recursive($defaults, $criteria);
-    $request = $this->normalizeIso88591($request);
-    
-    $payload = [
-      'auth' => [
-        'delisId' => $this->getDelisId(),
-        'authToken' => $this->getToken()
-      ]
-    ] + $request;
-    
+    \Stephane888\Debug\debugLog::symfonyDebug($payload, 'findParcelShops__payload', true);
     try {
-      // Operation name is typically "findParcelShops".
-      // Some WSDLs wrap parameters differently; if you get a SOAP fault,
-      // we'll adjust the payload shape to match your WSDL exactly.
       $response = $this->getParcelShopClient()->findParcelShops($payload);
       return (array) $response;
     }
     catch (\SoapFault $e) {
       if ($this->isAuthExpiredFault($e)) {
         $this->tokenManager->clear();
-        $payload['auth']['authToken'] = $this->getToken();
         $response = $this->getParcelShopClient()->findParcelShops($payload);
         return (array) $response;
       }
-      
+      \Stephane888\Debug\debugLog::symfonyDebug($e, 'findParcelShops__error', true);
       $this->logger->error('DPD ParcelShopFinder error: @msg', [
         '@msg' => $e->getMessage()
       ]);
