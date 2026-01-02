@@ -132,7 +132,7 @@ final class DpdAuthTokenManager implements DpdAuthTokenManagerInterface {
       $this->store->set(self::TOKEN_LAST_GENERATION_DATE_KEY, $currentTime);
     }
     
-    $this->logger->debug('DPD token generation count: @count/10', [
+    $this->logger->debug('DPD token generation count: @count/' . self::MAX_TOKENS_PER_DAY, [
       '@count' => $count
     ]);
   }

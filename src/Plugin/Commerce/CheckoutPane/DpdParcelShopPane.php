@@ -25,6 +25,10 @@ use Drupal\profile\Entity\ProfileInterface;
 final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFactoryPluginInterface {
   
   use AjaxFormTrait;
+  /**
+   *
+   * @var \Drupal\commerce_dpd\ApiClient\DpdApiClient
+   */
   protected $dpdApiClient;
   
   public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition, ?CheckoutFlowInterface $checkout_flow = NULL) {

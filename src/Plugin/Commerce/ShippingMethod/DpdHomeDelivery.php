@@ -97,77 +97,6 @@ class DpdHomeDelivery extends ShippingMethodBase {
   public function buildConfigurationForm(array $form, FormStateInterface $form_state) {
     $form = parent::buildConfigurationForm($form, $form_state);
     
-    $form['api_settings'] = [
-      '#type' => 'fieldset',
-      '#title' => $this->t('API Settings'),
-      '#weight' => -10
-    ];
-    
-    $form['api_settings']['api_mode'] = [
-      '#type' => 'radios',
-      '#title' => $this->t('API Mode'),
-      '#options' => [
-        'test' => $this->t('Test Mode'),
-        'live' => $this->t('Live Mode')
-      ],
-      '#default_value' => $this->configuration['api_mode'],
-      '#description' => $this->t('Use test mode for development and live mode for production.')
-    ];
-    
-    $form['api_settings']['test_credentials'] = [
-      '#type' => 'details',
-      '#title' => $this->t('Test Credentials'),
-      '#open' => $this->configuration['api_mode'] === 'test',
-      '#states' => [
-        'visible' => [
-          ':input[name="plugin[0][target_plugin_configuration][api_settings][api_mode]"]' => [
-            'value' => 'test'
-          ]
-        ]
-      ]
-    ];
-    
-    $form['api_settings']['test_credentials']['test_delis_id'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Test Delis ID'),
-      '#default_value' => $this->configuration['test_delis_id'],
-      '#required' => FALSE
-    ];
-    
-    $form['api_settings']['test_credentials']['test_auth_token'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Test Auth Token'),
-      '#default_value' => $this->configuration['test_auth_token'],
-      '#required' => FALSE
-    ];
-    
-    $form['api_settings']['live_credentials'] = [
-      '#type' => 'details',
-      '#title' => $this->t('Live Credentials'),
-      '#open' => $this->configuration['api_mode'] === 'live',
-      '#states' => [
-        'visible' => [
-          ':input[name="plugin[0][target_plugin_configuration][api_settings][api_mode]"]' => [
-            'value' => 'live'
-          ]
-        ]
-      ]
-    ];
-    
-    $form['api_settings']['live_credentials']['live_delis_id'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Live Delis ID'),
-      '#default_value' => $this->configuration['live_delis_id'],
-      '#required' => FALSE
-    ];
-    
-    $form['api_settings']['live_credentials']['live_auth_token'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Live Auth Token'),
-      '#default_value' => $this->configuration['live_auth_token'],
-      '#required' => FALSE
-    ];
-    
     $form['product_settings'] = [
       '#type' => 'fieldset',
       '#title' => $this->t('Product Settings')
@@ -386,19 +315,23 @@ class DpdHomeDelivery extends ShippingMethodBase {
   public function validateConfigurationForm(array &$form, FormStateInterface $form_state) {
     parent::validateConfigurationForm($form, $form_state);
     
-    $values = $form_state->getValue($form['#parents']);
-    $api_mode = $values['api_settings']['api_mode'];
+    // $values = $form_state->getValue($form['#parents']);
+    // $api_mode = $values['api_settings']['api_mode'];
     
-    if ($api_mode === 'test') {
-      if (empty($values['api_settings']['test_credentials']['test_delis_id'])) {
-        $form_state->setError($form['api_settings']['test_credentials']['test_delis_id'], $this->t('Test Delis ID is required in test mode.'));
-      }
-    }
-    else {
-      if (empty($values['api_settings']['live_credentials']['live_delis_id'])) {
-        $form_state->setError($form['api_settings']['live_credentials']['live_delis_id'], $this->t('Live Delis ID is required in live mode.'));
-      }
-    }
+    // if ($api_mode === 'test') {
+    // if (empty($values['api_settings']['test_credentials']['test_delis_id']))
+    // {
+    // $form_state->setError($form['api_settings']['test_credentials']['test_delis_id'],
+    // $this->t('Test Delis ID is required in test mode.'));
+    // }
+    // }
+    // else {
+    // if (empty($values['api_settings']['live_credentials']['live_delis_id']))
+    // {
+    // $form_state->setError($form['api_settings']['live_credentials']['live_delis_id'],
+    // $this->t('Live Delis ID is required in live mode.'));
+    // }
+    // }
   }
   
   /**
@@ -410,13 +343,6 @@ class DpdHomeDelivery extends ShippingMethodBase {
     
     if (!$form_state->getErrors()) {
       $values = $form_state->getValue($form['#parents']);
-      
-      $this->configuration['api_mode'] = $values['api_settings']['api_mode'];
-      $this->configuration['test_delis_id'] = $values['api_settings']['test_credentials']['test_delis_id'] ?? '';
-      $this->configuration['test_auth_token'] = $values['api_settings']['test_credentials']['test_auth_token'] ?? '';
-      $this->configuration['live_delis_id'] = $values['api_settings']['live_credentials']['live_delis_id'] ?? '';
-      $this->configuration['live_auth_token'] = $values['api_settings']['live_credentials']['live_auth_token'] ?? '';
-      
       $this->configuration['default_product'] = $values['product_settings']['default_product'];
       
       $this->configuration['insurance_enabled'] = !empty($values['insurance']['insurance_enabled']);

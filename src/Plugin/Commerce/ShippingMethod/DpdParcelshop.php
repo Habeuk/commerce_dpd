@@ -92,25 +92,6 @@ class DpdParcelshop extends ShippingMethodBase {
   public function buildConfigurationForm(array $form, FormStateInterface $form_state) {
     $form = parent::buildConfigurationForm($form, $form_state);
     
-    // Hériter des paramètres API de DpdHomeDelivery ou les redéfinir
-    $form['api_settings'] = [
-      '#type' => 'fieldset',
-      '#title' => $this->t('API Settings'),
-      '#weight' => -10
-    ];
-    
-    $form['api_settings']['api_mode'] = [
-      '#type' => 'radios',
-      '#title' => $this->t('API Mode'),
-      '#options' => [
-        'test' => $this->t('Test Mode'),
-        'live' => $this->t('Live Mode')
-      ],
-      '#default_value' => $this->configuration['api_mode']
-    ];
-    
-    // ... (similaire à DpdHomeDelivery pour les credentials)
-    
     $form['parcelshop_settings'] = [
       '#type' => 'fieldset',
       '#title' => $this->t('ParcelShop Settings')
@@ -346,13 +327,6 @@ class DpdParcelshop extends ShippingMethodBase {
     
     if (!$form_state->getErrors()) {
       $values = $form_state->getValue($form['#parents']);
-      
-      // API settings
-      $this->configuration['api_mode'] = $values['api_settings']['api_mode'];
-      $this->configuration['test_delis_id'] = $values['api_settings']['test_credentials']['test_delis_id'] ?? '';
-      $this->configuration['test_auth_token'] = $values['api_settings']['test_credentials']['test_auth_token'] ?? '';
-      $this->configuration['live_delis_id'] = $values['api_settings']['live_credentials']['live_delis_id'] ?? '';
-      $this->configuration['live_auth_token'] = $values['api_settings']['live_credentials']['live_auth_token'] ?? '';
       
       // ParcelShop settings
       $this->configuration['parcelshop_required'] = !empty($values['parcelshop_settings']['parcelshop_required']);
