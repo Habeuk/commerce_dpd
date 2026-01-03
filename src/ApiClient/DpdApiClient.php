@@ -180,6 +180,8 @@ final class DpdApiClient implements DpdApiClientInterface {
   }
   
   /**
+   * il faut tenir compte de ce code d'erreur: PARCELSHOPFINDER_NO_GEODATA_FOUND
+   * ( apres avoir mit sur peid la map ).
    *
    * {@inheritdoc}
    */
