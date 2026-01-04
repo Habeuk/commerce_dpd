@@ -233,7 +233,6 @@ final class DpdApiClient implements DpdApiClientInterface {
           throw $e;
         }
       });
-    dump($response);
     return ParcelShop::createCollectionFromResponse($response);
   }
   

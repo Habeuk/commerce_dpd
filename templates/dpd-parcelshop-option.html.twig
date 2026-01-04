@@ -1,0 +1,31 @@
+{#
+/**
+ * @file
+ * Template for individual DPD ParcelShop radio options.
+ *
+ * Variables:
+ * - id: The parcel shop ID
+ * - company: Company name
+ * - street: Street address
+ * - zip: ZIP/Postal code
+ * - city: City
+ * - distance: Distance in kilometers
+ * - attributes: Additional HTML attributes for the option
+ */
+#}
+<div class="parcelshop-option" data-id="{{ id }}" {{ attributes }}>
+  <strong class="parcelshop-option__company">{{ company }}</strong>
+  <div class="parcelshop-option__address">
+    {{ street }}, {{ zip }} {{ city }}
+  </div>
+  <div class="parcelshop-option__distance">
+    {{ 'Distance: @distance km'|t({'@distance': distance}) }}
+  </div>
+  
+  {# Additional information can be added here #}
+  {% if extra_info is not empty %}
+    <div class="parcelshop-option__extra">
+      {{ extra_info }}
+    </div>
+  {% endif %}
+</div>

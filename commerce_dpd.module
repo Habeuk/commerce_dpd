@@ -9,20 +9,48 @@
 // On verra si n integre ce champs ou pas.
 
 // function commerce_dpd_update_8001() {
-//   $schema = \Drupal::database()->schema();
-  
-//   // Add order_number field for better searching
-//   if (!$schema->fieldExists('commerce_dpd_shipments', 'order_number')) {
-//     $schema->addField('commerce_dpd_shipments', 'order_number', [
-//       'type' => 'varchar',
-//       'length' => 64,
-//       'not null' => FALSE,
-//       'description' => 'Order number for easier searching'
-//     ]);
-    
-//     // Add index for faster searching
-//     $schema->addIndex('commerce_dpd_shipments', 'order_number', [
-//       'order_number'
-//     ]);
-//   }
+// $schema = \Drupal::database()->schema();
+
+// // Add order_number field for better searching
+// if (!$schema->fieldExists('commerce_dpd_shipments', 'order_number')) {
+// $schema->addField('commerce_dpd_shipments', 'order_number', [
+// 'type' => 'varchar',
+// 'length' => 64,
+// 'not null' => FALSE,
+// 'description' => 'Order number for easier searching'
+// ]);
+
+// // Add index for faster searching
+// $schema->addIndex('commerce_dpd_shipments', 'order_number', [
+// 'order_number'
+// ]);
 // }
+// }
+
+/**
+ * Implements hook_theme().
+ */
+function commerce_dpd_theme($existing, $type, $theme, $path) {
+  return [
+    'dpd_parcelshop_option' => [
+      'variables' => [
+        'id' => NULL,
+        'company' => '',
+        'street' => '',
+        'zip' => '',
+        'city' => '',
+        'distance' => 0,
+        'extra_info' => [],
+        'attributes' => NULL
+      ],
+      'template' => 'dpd-parcelshop-option'
+    ],
+    'dpd_map_popup' => [
+      'variables' => [
+        'shop' => NULL,
+        'texts' => []
+      ],
+      'template' => 'dpd-map-popup'
+    ]
+  ];
+}

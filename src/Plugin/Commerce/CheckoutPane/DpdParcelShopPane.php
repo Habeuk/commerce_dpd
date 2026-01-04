@@ -11,6 +11,7 @@ use Drupal\commerce_dpd\ApiClient\DpdApiClientInterface;
 use Drupal\commerce_checkout\Plugin\Commerce\CheckoutFlow\CheckoutFlowInterface;
 use Drupal\profile\Entity\ProfileInterface;
 use Drupal\Core\Render\Markup;
+use Drupal\Core\Template\Attribute;
 
 /**
  * Allows selecting a DPD ParcelShop during checkout.
@@ -120,7 +121,25 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
       ]
     ];
     
-    // === COLONNE GAUCHE : LISTE ===
+    // === CARTE ===
+    $pane_form['container']['map_column'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => [
+          'dpd-map-column'
+        ]
+      ]
+    ];
+    $pane_form['container']['map_column']['map_container'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => 'dpd-map-container',
+        'class' => [
+          'dpd-map-wrapper'
+        ]
+      ]
+    ];
+    // === LISTE ===
     $pane_form['container']['list_column'] = [
       '#type' => 'container',
       '#attributes' => [
@@ -129,7 +148,6 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
         ]
       ]
     ];
-    
     $pane_form['container']['list_column']['selected_parcelshop'] = [
       '#type' => 'radios',
       '#title' => $this->t('Choose a pickup point'),
@@ -145,26 +163,6 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
       ]
     ];
     
-    // === COLONNE DROITE : CARTE ===
-    $pane_form['container']['map_column'] = [
-      '#type' => 'container',
-      '#attributes' => [
-        'class' => [
-          'dpd-map-column'
-        ]
-      ]
-    ];
-    
-    // Conteneur pour la carte
-    $pane_form['container']['map_column']['map_container'] = [
-      '#type' => 'container',
-      '#attributes' => [
-        'id' => 'dpd-map-container',
-        'class' => [
-          'dpd-map-wrapper'
-        ]
-      ]
-    ];
     // Charger les bibliothèques
     $pane_form['#attached'] = [
       'library' => [
@@ -226,27 +224,56 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
    */
   private function buildOptions(array $shops): array {
     $options = [];
-    
+    $renderer = \Drupal::service('renderer');
     foreach ($shops as $shop) {
+      /**
+       *
+       * @var \Drupal\commerce_dpd\DpdData\ParcelShop $shop
+       */
       $id = $shop->getId();
-      if ($id === '') {
+      if (!$id) {
         continue;
       }
-      
-      $company = $shop->getCompany() ?? '';
-      $street = $shop->getAddress()?->getStreet() ?? '';
-      $zip = $shop->zipCode ?? '';
-      $city = $shop->city ?? '';
-      $distance = round($shop->getDistance(), 2);
-      
-      $options[$id] = Markup::create(
-        '<div class="parcelshop-option" data-id="' . $id . '">' . '<strong>' . $company . '</strong><br>' . $street . ', ' . $zip . ' ' . $city . '<br>' . '<small>' . $this->t(
-          'Distance: @distance km', [
-            '@distance' => $distance
-          ]) . '</small>' . '</div>');
+      // Rendre le template Twig
+      $template = [
+        '#theme' => 'dpd_parcelshop_option',
+        '#id' => $id,
+        '#company' => $shop->getCompany() ?? '',
+        '#street' => $shop->getAddress()?->getStreet() ?? '',
+        '#zip' => $shop->zipCode ?? '',
+        '#city' => $shop->city ?? '',
+        '#distance' => round($shop->getDistance(), 2),
+        '#extra_info' => $this->getExtraShopInfo($shop),
+        '#attributes' => new Attribute([
+          'class' => [
+            'parcelshop-option'
+          ]
+        ])
+      ];
+      $rendered = $renderer->render($template);
+      $options[$id] = Markup::create((string) $rendered);
     }
-    
     return $options;
+  }
+  
+  /**
+   * Get additional information about the shop for display.
+   */
+  private function getExtraShopInfo($shop): array {
+    $info = [];
+    // Check opening hours for today
+    if ($shop->isOpenToday()) {
+      $info[] = [
+        '#markup' => '<span class="open-today">' . $this->t('Open today') . '</span>'
+      ];
+    }
+    // Check for specific services
+    if ($shop->hasService('express')) {
+      $info[] = [
+        '#markup' => '<span class="express-service">' . $this->t('Express pickup') . '</span>'
+      ];
+    }
+    return $info;
   }
   
   /**
