@@ -4,6 +4,9 @@ namespace Drupal\commerce_dpd\ApiClient;
 
 use Drupal\commerce_dpd\Service\DpdAuthTokenManagerInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Drupal\commerce_dpd\DpdData\ParcelShop;
+use Symfony\Component\Cache\Adapter\FilesystemAdapter;
+use Symfony\Contracts\Cache\ItemInterface;
 
 /**
  * DPD SOAP API client.
@@ -15,7 +18,7 @@ final class DpdApiClient implements DpdApiClientInterface {
   protected DpdAuthTokenManagerInterface $tokenManager;
   protected $logger;
   
-  public function __construct(LoggerChannelFactoryInterface $logger_factory, DpdAuthTokenManagerInterface $token_manager) {
+  public function __construct(LoggerChannelFactoryInterface $logger_factory, DpdAuthTokenManagerInterface $token_manager, private readonly FilesystemAdapter $cache) {
     $this->logger = $logger_factory->get('commerce_dpd');
     $this->tokenManager = $token_manager;
   }
@@ -201,24 +204,36 @@ final class DpdApiClient implements DpdApiClientInterface {
       ]
     ];
     $payload = $this->normalizeIso88591($request);
-    
-    \Stephane888\Debug\debugLog::symfonyDebug($payload, 'findParcelShops__payload', true);
-    try {
-      $response = $this->getParcelShopClient()->findParcelShops($payload);
-      return (array) $response;
-    }
-    catch (\SoapFault $e) {
-      if ($this->isAuthExpiredFault($e)) {
-        $this->tokenManager->clear();
-        $response = $this->getParcelShopClient()->findParcelShops($payload);
-        return (array) $response;
-      }
-      \Stephane888\Debug\debugLog::symfonyDebug($e, 'findParcelShops__error', true);
-      $this->logger->error('DPD ParcelShopFinder error: @msg', [
-        '@msg' => $e->getMessage()
-      ]);
-      throw $e;
-    }
+    $cacheKey = $this->getCacheKey($payload);
+    $response = $this->cache->get($cacheKey,
+      function (ItemInterface $item) use ($payload) {
+        // Cache 30 minutes.
+        $item->expiresAfter(1800);
+        try {
+          return $this->getParcelShopClient()->findParcelShops($payload);
+        }
+        catch (\SoapFault $e) {
+          if ($this->isAuthExpiredFault($e)) {
+            $this->tokenManager->clear();
+            return $this->getParcelShopClient()->findParcelShops($payload);
+          }
+          \Stephane888\Debug\debugLog::symfonyDebug($e, 'findParcelShops__error', true);
+          $this->logger->error('DPD ParcelShopFinder error: @msg', [
+            '@msg' => $e->getMessage()
+          ]);
+          $item->expiresAfter(200);
+          throw $e;
+        }
+        catch (\Throwable $e) {
+          $this->logger->error('DPD ParcelShopFinder ERROR (@code): @message', [
+            '@code' => $e->getCode() ?? 'UNKNOWN',
+            '@message' => $e->getMessage()
+          ]);
+          $item->expiresAfter(0);
+          throw $e;
+        }
+      });
+    return ParcelShop::createCollectionFromResponse($response);
   }
   
   /**
@@ -327,5 +342,9 @@ final class DpdApiClient implements DpdApiClientInterface {
   protected function isAuthExpiredFault(\SoapFault $e): bool {
     $msg = $e->getMessage();
     return str_contains($msg, 'LOGIN_5') || str_contains($msg, 'LOGIN_6');
+  }
+  
+  private function getCacheKey(array $payload): string {
+    return 'parcelshop_' . hash('sha256', serialize($payload));
   }
 }

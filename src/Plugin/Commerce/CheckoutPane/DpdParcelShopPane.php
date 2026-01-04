@@ -84,7 +84,11 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
       catch (\Throwable $e) {
         // Pas d’erreur bloquante : on laisse l’utilisateur continuer,
         // mais on lui affiche un message utile.
-        $this->messenger()->addError($this->t('Unable to load DPD ParcelShops. Please try again.'));
+        \Drupal::logger('commerce_dpd')->error('DPD Commerce PANE ParcelShopFinder ERROR (@code): @message', [
+          '@code' => $e->getCode() ?? 'UNKNOWN',
+          '@message' => $e->getMessage()
+        ]);
+        $this->messenger()->addError($this->t('Unable to load DPD ParcelShops. Please try again. : ' . $e->getMessage()));
       }
     }
     
@@ -106,12 +110,6 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
       '#type' => 'hidden',
       '#default_value' => (string) $this->order->getData('dpd_parcelshop_data')
     ];
-    
-    // UI : afficher la liste brute si tu veux débug.
-    $pane_form['debug'] = [
-      '#markup' => '<pre>' . print_r($shops, TRUE) . '</pre>'
-    ];
-    
     return $pane_form;
   }
   
@@ -170,17 +168,20 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
   
   private function buildOptions(array $shops): array {
     $options = [];
+    
     foreach ($shops as $shop) {
-      // Ton retour exact dépendra du WSDL; adapte les clés si besoin.
-      $id = (string) ($shop['parcelShopId'] ?? $shop->parcelShopId ?? '');
+      /**
+       *
+       * @var \Drupal\commerce_dpd\DpdData\ParcelShop $shop
+       */
+      $id = $shop->getId();
       if ($id === '') {
         continue;
       }
-      $company = (string) ($shop['company'] ?? $shop->company ?? '');
-      $street = (string) ($shop['street'] ?? $shop->street ?? '');
-      $zip = (string) ($shop['zipCode'] ?? $shop->zipCode ?? '');
-      $city = (string) ($shop['city'] ?? $shop->city ?? '');
-      
+      $company = (string) $shop->getCompany() ?? '';
+      $street = (string) $shop->getAddress()?->getStreet() ?? '';
+      $zip = (string) $shop->zipCode ?? '';
+      $city = (string) $shop->city ?? '';
       $options[$id] = trim($company . ' — ' . $street . ', ' . $zip . ' ' . $city);
     }
     return $options;

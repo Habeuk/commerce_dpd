@@ -12,3 +12,11 @@ services:
     arguments:
       - '@logger.factory'
       - '@commerce_dpd.auth_token_manager'
+      - '@commerce_dpd.cache.parcelshop'
+
+  commerce_dpd.cache.parcelshop:
+    class: Symfony\Component\Cache\Adapter\FilesystemAdapter
+    arguments:
+      - 'commerce_dpd_parcelshop'
+      - 0
+      - '%app.root%/%site.path%/files/php/cache/commerce_dpd'  
