@@ -3,22 +3,34 @@
 namespace Drupal\commerce_dpd\DpdData;
 
 use Drupal\commerce_dpd\DpdHelper\BaseData;
+use Drupal\commerce_dpd\Dto\Attribute\DpdField;
+use Drupal\commerce_dpd\Dto\Hydrator\DpdHydrator;
 
+/**
+ * Représente les coordonnées géographiques d'un point relais DPD.
+ */
 class Coordinates extends BaseData {
-  private float $latitude;
-  private float $longitude;
-  private ?float $coordinateX;
-  private ?float $coordinateY;
-  private ?float $coordinateZ;
+  // === COORDONNÉES GÉOGRAPHIQUES ===
+  #[DpdField(source: 'latitude', type: 'float', required: true)]
+  public readonly float $latitude;
+  #[DpdField(source: 'longitude', type: 'float', required: true)]
+  public readonly float $longitude;
   
-  public function __construct(float $latitude, float $longitude, ?float $coordinateX = null, ?float $coordinateY = null, ?float $coordinateZ = null) {
-    $this->latitude = $latitude;
-    $this->longitude = $longitude;
-    $this->coordinateX = $coordinateX;
-    $this->coordinateY = $coordinateY;
-    $this->coordinateZ = $coordinateZ;
+  // === COORDONNÉES CARTÉSIENNES (optionnelles) ===
+  #[DpdField(source: 'coordinateX', type: 'float')]
+  public readonly ?float $coordinateX;
+  #[DpdField(source: 'coordinateY', type: 'float')]
+  public readonly ?float $coordinateY;
+  #[DpdField(source: 'coordinateZ', type: 'float')]
+  public readonly ?float $coordinateZ;
+  
+  /**
+   * Constructeur privé - utilisation via factory uniquement.
+   */
+  private function __construct() {
   }
   
+  // Getters
   public function getLatitude(): float {
     return $this->latitude;
   }
@@ -39,19 +51,58 @@ class Coordinates extends BaseData {
     return $this->coordinateZ;
   }
   
+  /**
+   * Calcule la distance en km entre ces coordonnées et d'autres.
+   */
+  public function distanceTo(Coordinates $other): float {
+    $earthRadius = 6371; // Rayon de la Terre en km
+    
+    $latFrom = deg2rad($this->latitude);
+    $lonFrom = deg2rad($this->longitude);
+    $latTo = deg2rad($other->getLatitude());
+    $lonTo = deg2rad($other->getLongitude());
+    
+    $latDelta = $latTo - $latFrom;
+    $lonDelta = $lonTo - $lonFrom;
+    
+    $angle = 2 * asin(sqrt(pow(sin($latDelta / 2), 2) + cos($latFrom) * cos($latTo) * pow(sin($lonDelta / 2), 2)));
+    
+    return $angle * $earthRadius;
+  }
+  
+  /**
+   * Vérifie si les coordonnées sont valides.
+   */
+  public function isValid(): bool {
+    return $this->latitude >= -90 && $this->latitude <= 90 && $this->longitude >= -180 && $this->longitude <= 180;
+  }
+  
+  /**
+   * Retourne les coordonnées au format WGS84 (standard GPS).
+   */
+  public function getWgs84(): string {
+    $latDir = $this->latitude >= 0 ? 'N' : 'S';
+    $lonDir = $this->longitude >= 0 ? 'E' : 'W';
+    
+    return sprintf('%.6f°%s, %.6f°%s', abs($this->latitude), $latDir, abs($this->longitude), $lonDir);
+  }
+  
   public function toArray(): array {
     return [
       'latitude' => $this->latitude,
       'longitude' => $this->longitude,
       'coordinate_x' => $this->coordinateX,
       'coordinate_y' => $this->coordinateY,
-      'coordinate_z' => $this->coordinateZ
+      'coordinate_z' => $this->coordinateZ,
+      'wgs84' => $this->getWgs84(),
+      'is_valid' => $this->isValid()
     ];
   }
   
-  public static function createFromDpdData(array|object $dataRaw): self {
-    $data = self::normalizeStdClassToArray($dataRaw);
-    return new self((float) ($data['latitude'] ?? 0.0), (float) ($data['longitude'] ?? 0.0), isset($data['coordinateX']) ? (float) $data['coordinateX'] : null, isset($data['coordinateY']) ? (float) $data['coordinateY'] : null, isset(
-      $data['coordinateZ']) ? (float) $data['coordinateZ'] : null);
+  /**
+   * Factory method : crée un Coordinates depuis les données brutes DPD.
+   */
+  public static function createFromDpdData(array|object $data, DpdHydrator $hydrator): self {
+    return $hydrator->hydrate(Coordinates::class, $data);
   }
 }

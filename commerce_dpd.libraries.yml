@@ -1,0 +1,14 @@
+openstreetmap:
+  version: 1.x
+  css:
+    theme:
+      https://unpkg.com/leaflet@1.9.4/dist/leaflet.css: { type: external }
+      css/dpd-map.css: {}
+  js:
+    https://unpkg.com/leaflet@1.9.4/dist/leaflet.js: { type: external, minified: true }
+    js/dpd-map.js: {}
+    js/dpd-map-events.js: {}
+  dependencies:
+    - core/drupal
+    - core/drupalSettings
+    - core/once

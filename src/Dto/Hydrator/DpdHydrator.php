@@ -32,16 +32,28 @@ class DpdHydrator {
     if (empty($attributes)) {
       return;
     }
+    if ($instance instanceof \Drupal\commerce_dpd\DpdData\ParcelShop && $property->getName() == 'coordinates') {
+      // dd($attributes, $instance);
+    }
+    
     $attribute = $attributes[0]->newInstance();
     
-    $value = $this->getValue($data, $attribute, $property->getName());
+    $value = $this->getValue($data, $attribute, $property);
     if (!$property->isPublic()) {
       $property->setAccessible(true);
     }
     $property->setValue($instance, $value);
   }
   
-  private function getValue(array $data, DpdField $attribute, string $propertyName) {
+  private function getValue(array $data, DpdField $attribute, \ReflectionProperty $property) {
+    // Créer récursivement les objets avec attributs
+    if (!$attribute->factory && !$attribute->type && !$attribute->source) {
+      $type = $property->getType();
+      if ($type && !$type->isBuiltin() && class_exists($type->getName())) {
+        return $this->hydrate($type->getName(), $data);
+      }
+    }
+    $propertyName = $property->getName();
     $key = $attribute->source ?: $propertyName;
     $value = $this->getByPath($data, $key);
     if ($value === null && $attribute->required) {
@@ -50,6 +62,7 @@ class DpdHydrator {
     if ($attribute->factory && $value !== null) {
       return $this->callFactory($attribute->factory, $value);
     }
+    
     if ($attribute->type && $value !== null) {
       return $this->cast($value, $attribute->type);
     }

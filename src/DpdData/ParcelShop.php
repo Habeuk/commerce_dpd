@@ -43,7 +43,7 @@ class ParcelShop extends BaseData {
   public readonly ?string $town;
   
   // === COORDONNÉES ===
-  #[DpdField(factory: Coordinates::class . '::fromDpd')]
+  #[DpdField(factory: null)]
   public readonly ?Coordinates $coordinates;
   
   // === DISTANCE ===
