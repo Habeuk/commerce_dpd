@@ -93,6 +93,10 @@ class ParcelShop extends BaseData {
     return $this->address;
   }
   
+  public function getZipCode(): string|int {
+    return $this->zipCode;
+  }
+  
   public function getCoordinates(): Coordinates {
     return $this->coordinates;
   }

@@ -18,7 +18,7 @@ use Drupal\Core\Template\Attribute;
  *
  * @CommerceCheckoutPane(
  *   id = "dpd_parcelshop",
- *   label = @Translation("DPD ParcelShop"),
+ *   label = @Translation("DPD Parcel Shop"),
  *   default_step = "order_information",
  *   wrapper_element = "fieldset",
  * )
@@ -90,12 +90,14 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
           if ($shop->getCoordinates()) {
             $map_data[] = [
               'id' => $shop->getId(),
+              'pudoId' => $shop->getPudoId(),
               'lat' => $shop->getCoordinates()->getLatitude(),
               'lon' => $shop->getCoordinates()->getLongitude(),
               'name' => $shop->getCompany(),
               'address' => $shop->getAddress() ? $shop->getAddress()?->getFormatted() : '',
               'distance' => round($shop->getDistance(), 2),
-              'opening_hours' => $this->formatOpeningHours($shop->getOpeningHours())
+              'opening_hours' => $this->formatOpeningHours($shop->getOpeningHours()),
+              'zip_code' => $shop->getZipCode()
             ];
           }
         }
@@ -285,6 +287,9 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
       return;
     }
     $selected = $form_state->getValue([
+      'dpd_parcelshop',
+      'container',
+      'list_column',
       'selected_parcelshop'
     ]);
     if (empty($selected) && $pane_form['container']['list_column']['selected_parcelshop']) {
@@ -303,6 +308,9 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
       return;
     }
     $selected = (string) $form_state->getValue([
+      'dpd_parcelshop',
+      'container',
+      'list_column',
       'selected_parcelshop'
     ]);
     $this->order->setData('dpd_parcelshop_id', $selected);
@@ -314,6 +322,46 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
         break;
       }
     }
+  }
+  
+  public function buildPaneSummary() {
+    $summary = [];
+    if ($this->isVisible()) {
+      $dpd_parcelshop_data = $this->order->getData('dpd_parcelshop_data');
+      if (!empty($dpd_parcelshop_data['name'])) {
+        $summary[] = [
+          '#type' => 'html_tag',
+          '#tag' => 'div',
+          [
+            '#type' => 'html_tag',
+            '#tag' => 'strong',
+            '#value' => $dpd_parcelshop_data['name']
+          ]
+        ];
+      }
+      if (!empty($dpd_parcelshop_data['address'])) {
+        $summary[] = [
+          '#type' => 'html_tag',
+          '#tag' => 'div',
+          '#value' => $dpd_parcelshop_data['address']
+        ];
+      }
+      if (!empty($dpd_parcelshop_data['zip_code'])) {
+        $summary[] = [
+          '#type' => 'html_tag',
+          '#tag' => 'div',
+          '#value' => $dpd_parcelshop_data['zip_code']
+        ];
+      }
+      if (!empty($dpd_parcelshop_data['id'])) {
+        $summary[] = [
+          '#type' => 'html_tag',
+          '#tag' => 'div',
+          '#value' => 'DPD ID : ' . $dpd_parcelshop_data['id']
+        ];
+      }
+    }
+    return $summary;
   }
   
   /**
