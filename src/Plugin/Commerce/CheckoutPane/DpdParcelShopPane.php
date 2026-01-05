@@ -284,7 +284,6 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
     if (!$this->isDpdParcelShopSelected()) {
       return;
     }
-    
     $selected = $form_state->getValue([
       'selected_parcelshop'
     ]);
@@ -303,12 +302,10 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
       $this->order->setData('dpd_parcelshop_data', NULL);
       return;
     }
-    
     $selected = (string) $form_state->getValue([
       'selected_parcelshop'
     ]);
     $this->order->setData('dpd_parcelshop_id', $selected);
-    
     // Stocker les données complètes
     $all_data = json_decode($pane_form['parcelshop_data']['#default_value'], true);
     foreach ($all_data as $shop_data) {
@@ -341,11 +338,9 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
     if ($form_state->has('shipping_profile')) {
       return $form_state->get('shipping_profile');
     }
-    
     if ($this->order->hasField('shipping_profile') && !$this->order->get('shipping_profile')->isEmpty()) {
       return $this->order->get('shipping_profile')->entity;
     }
-    
     return NULL;
   }
 }
