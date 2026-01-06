@@ -31,7 +31,6 @@ use Drupal\Core\Cache\CacheBackendInterface;
  * )
  */
 class DpdHomeDelivery extends ShippingMethodBase {
-  
   /**
    * The DPD API client.
    *
@@ -377,7 +376,6 @@ class DpdHomeDelivery extends ShippingMethodBase {
     if (!$this->validateShipmentLimits($shipment)) {
       return $rates;
     }
-    
     // Calculer le tarif de base
     $base_amount = $this->calculateBaseRate($shipment);
     
@@ -421,7 +419,7 @@ class DpdHomeDelivery extends ShippingMethodBase {
       
       $rates[] = new ShippingRate([
         'shipping_method_id' => $this->parentEntity->id(),
-        'service' => new ShippingService($service_id, $service_label),
+        'service' => $this->services[$service_id],
         'amount' => $service_amount,
         'description' => $this->getServiceDescription($service_id)
       ]);
@@ -434,14 +432,21 @@ class DpdHomeDelivery extends ShippingMethodBase {
    * Validate shipment against weight and dimension limits.
    */
   protected function validateShipmentLimits(ShipmentInterface $shipment): bool {
-    $total_weight = 0;
+    $total_weight_g = 0;
+    $weight = new \Drupal\physical\Weight(0, 'g');
     foreach ($shipment->getItems() as $item) {
-      $total_weight += $item->getWeight()->getNumber();
+      /**
+       *
+       * @var \Drupal\commerce_shipping\ShipmentItem $item
+       */
+      $mesure = $item->getWeight();
+      /**
+       *
+       * @var \Drupal\physical\Weight
+       */
+      $weight = $weight->add($mesure);
     }
-    
-    // Convertir en grammes si nécessaire
-    $total_weight_g = $total_weight * 1000;
-    
+    $total_weight_g = $weight->getNumber();
     if ($total_weight_g > $this->configuration['weight_limits']['max'] || $total_weight_g < $this->configuration['weight_limits']['min']) {
       return FALSE;
     }
@@ -458,7 +463,6 @@ class DpdHomeDelivery extends ShippingMethodBase {
     $order = $shipment->getOrder();
     $store = $order->getStore();
     $currency_code = $store->getDefaultCurrencyCode();
-    
     // Tarif de base : 6.90€
     $base_price = new Price('6.90', $currency_code);
     
@@ -484,10 +488,8 @@ class DpdHomeDelivery extends ShippingMethodBase {
     if (empty($this->configuration['free_shipping_threshold'])) {
       return FALSE;
     }
-    
     $threshold = new Price($this->configuration['free_shipping_threshold'], 'EUR');
     $order_total = $order->getTotalPrice();
-    
     return $order_total && $order_total->greaterThanOrEqual($threshold);
   }
   
@@ -530,5 +532,21 @@ class DpdHomeDelivery extends ShippingMethodBase {
    */
   public function isSaturdayDeliveryAvailable($service_id): bool {
     return $this->configuration['saturday_delivery_enabled'] && $service_id === 'dpd_express_1200';
+  }
+  
+  /**
+   *
+   * {@inheritdoc}
+   */
+  public function applies(ShipmentInterface $shipment) {
+    return TRUE;
+  }
+  
+  /**
+   *
+   * {@inheritdoc}
+   */
+  public function getLabel() {
+    return (string) $this->pluginDefinition['label'];
   }
 }
