@@ -1,4 +1,10 @@
 services:
+  commerce_dpd.order_subscriber:
+    class: Drupal\commerce_dpd\EventSubscriber\OrderSubscriber
+    arguments: ['@queue']
+    tags:
+      - { name: event_subscriber }
+
   commerce_dpd.auth_token_manager:
     class: Drupal\commerce_dpd\Service\DpdAuthTokenManager
     arguments:
@@ -20,3 +26,11 @@ services:
       - 'commerce_dpd_parcelshop'
       - 0
       - '%app.root%/%site.path%/files/php/cache/commerce_dpd'  
+
+  commerce_dpd.label_service:
+    class: Drupal\commerce_dpd\Service\DpdLabelService
+    arguments: ['@commerce_dpd.api_client', '@logger.factory', '@config.factory']
+
+  commerce_dpd.label_manager:
+    class: Drupal\commerce_dpd\Service\DpdLabelManager
+    arguments: ['@commerce_dpd.label_service', '@logger.factory']

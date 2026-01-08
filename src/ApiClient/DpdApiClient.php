@@ -26,6 +26,11 @@ final class DpdApiClient implements DpdApiClientInterface {
   private function getShipmentClient(): \SoapClient {
     if (!isset($this->shipmentClient))
       $this->initializeSoapClients();
+    // à chaque requette on reconstruit l'authentification, car le token peut
+    // expirer.
+    $this->parcelShopClient->__setSoapHeaders([
+      $this->buildAuthHeader()
+    ]);
     
     return $this->shipmentClient;
   }
@@ -155,28 +160,36 @@ final class DpdApiClient implements DpdApiClientInterface {
    *
    * {@inheritdoc}
    */
-  public function storeOrders(array $orders): array {
+  public function storeOrders(array $orders, array $print_option = [
+    'outputFormat' => 'PDF',
+    'paperFormat' => 'A6'
+  ]): object {
     $payload = [
-      'auth' => [
-        'delisId' => $this->getDelisId(),
-        'authToken' => $this->getToken()
+      'printOptions' => [
+        'printOption' => [
+          $print_option
+        ]
       ],
       'order' => $this->normalizeIso88591($orders)
     ];
     
     try {
-      return (array) $this->getShipmentClient()->storeOrders($payload);
+      return $this->getShipmentClient()->storeOrders($payload);
     }
     catch (\SoapFault $e) {
-      // If token expired, refresh once and retry.
       if ($this->isAuthExpiredFault($e)) {
         $this->tokenManager->clear();
-        //
-        return (array) $this->getShipmentClient()->storeOrders($payload);
+        return $this->getShipmentClient()->storeOrders($payload);
       }
-      
       $this->logger->error('DPD ShipmentService error: @msg', [
         '@msg' => $e->getMessage()
+      ]);
+      throw $e;
+    }
+    catch (\Throwable $e) {
+      $this->logger->error('DPD ShipmentService ERROR (@code): @message', [
+        '@code' => $e->getCode() ?? 'UNKNOWN',
+        '@message' => $e->getMessage()
       ]);
       throw $e;
     }

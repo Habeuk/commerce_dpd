@@ -12,6 +12,7 @@ use Drupal\Core\Form\FormStateInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\commerce_dpd\ApiClient\DpdApiClientInterface;
 use Drupal\Core\Cache\CacheBackendInterface;
+use Drupal\physical\Weight;
 
 /**
  * Provides the DPD Home Delivery shipping method.
@@ -85,7 +86,12 @@ class DpdHomeDelivery extends ShippingMethodBase {
         'length' => '120',
         'width' => '60',
         'height' => '60'
-      ]
+      ],
+      'base_fee' => '2.90',
+      'threshold_g' => '5000',
+      'extra_fee_per_step' => '0.50',
+      'step_g' => 1000,
+      'rounding_mode' => 'pro_rata'
     ] + parent::defaultConfiguration();
   }
   
@@ -432,28 +438,29 @@ class DpdHomeDelivery extends ShippingMethodBase {
    * Validate shipment against weight and dimension limits.
    */
   protected function validateShipmentLimits(ShipmentInterface $shipment): bool {
-    $total_weight_g = 0;
-    $weight = new \Drupal\physical\Weight(0, 'g');
-    foreach ($shipment->getItems() as $item) {
-      /**
-       *
-       * @var \Drupal\commerce_shipping\ShipmentItem $item
-       */
-      $mesure = $item->getWeight();
-      /**
-       *
-       * @var \Drupal\physical\Weight
-       */
-      $weight = $weight->add($mesure);
-    }
-    $total_weight_g = $weight->getNumber();
+    $total_weight_g = $this->getTotalWeightG($shipment);
     if ($total_weight_g > $this->configuration['weight_limits']['max'] || $total_weight_g < $this->configuration['weight_limits']['min']) {
       return FALSE;
     }
-    
     // TODO: Valider les dimensions des colis
     // Pour l'instant, on accepte tout
     return TRUE;
+  }
+  
+  /**
+   *
+   * @param ShipmentInterface $shipment
+   * @return int
+   */
+  protected function getTotalWeightG(ShipmentInterface $shipment): int {
+    $total = new Weight('0', 'g');
+    foreach ($shipment->getItems() as $item) {
+      $w = $item->getWeight();
+      if ($w) {
+        $total = $total->add($w); // add() convertit automatiquement vers 'g'
+      }
+    }
+    return (int) $total->getNumber();
   }
   
   /**
@@ -461,23 +468,28 @@ class DpdHomeDelivery extends ShippingMethodBase {
    */
   protected function calculateBaseRate(ShipmentInterface $shipment): Price {
     $order = $shipment->getOrder();
-    $store = $order->getStore();
-    $currency_code = $store->getDefaultCurrencyCode();
-    // Tarif de base : 6.90€
-    $base_price = new Price('6.90', $currency_code);
-    
-    // Supplément par kg au-dessus de 5kg
-    $total_weight = 0;
-    foreach ($shipment->getItems() as $item) {
-      $total_weight += $item->getWeight()->getNumber();
+    $currency_code = $order->getStore()->getDefaultCurrencyCode();
+    // Config.
+    $base_fee = (string) ($this->configuration['base_fee'] ?? '2.90');
+    $threshold_g = (float) ($this->configuration['threshold_g'] ?? '5000');
+    $step_g = (float) ($this->configuration['step_g'] ?? '1000');
+    $extra_fee_per_step = (float) ($this->configuration['extra_fee_per_step'] ?? '0.50');
+    $rounding_mode = (string) ($this->configuration['rounding_mode'] ?? 'pro_rata');
+    $base_price = new Price($base_fee, $currency_code);
+    $total_g = (float) $this->getTotalWeightG($shipment);
+    if ($step_g <= 0) {
+      return $base_price;
     }
-    
-    if ($total_weight > 5) {
-      $extra_weight = $total_weight - 5;
-      $extra_charge = $extra_weight * 0.5; // 0.50€ par kg supplémentaire
-      $base_price = $base_price->add(new Price((string) $extra_charge, $currency_code));
+    if ($total_g > $threshold_g) {
+      $extra_g = $total_g - $threshold_g;
+      $steps = $extra_g / $step_g;
+      if ($rounding_mode === 'ceil') {
+        $steps = ceil($steps);
+      }
+      $extra_charge = $steps * $extra_fee_per_step;
+      $extra_charge = number_format($extra_charge, 2, '.', '');
+      $base_price = $base_price->add(new Price($extra_charge, $currency_code));
     }
-    
     return $base_price;
   }
   

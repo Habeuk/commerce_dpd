@@ -78,9 +78,6 @@ class DpdParcelshop extends ShippingMethodBase {
         'email'
       ],
       'widget_style' => 'list',
-      'map_enabled' => TRUE,
-      'map_provider' => 'google',
-      'map_api_key' => '',
       'auto_select_nearest' => FALSE
     ] + parent::defaultConfiguration();
   }
@@ -166,72 +163,6 @@ class DpdParcelshop extends ShippingMethodBase {
       '#title' => $this->t('Auto-select nearest ParcelShop'),
       '#default_value' => $this->configuration['auto_select_nearest'],
       '#description' => $this->t('Automatically select the nearest ParcelShop when only one is available.')
-    ];
-    
-    $form['map_settings'] = [
-      '#type' => 'fieldset',
-      '#title' => $this->t('Map Settings'),
-      '#states' => [
-        'visible' => [
-          [
-            ':input[name="plugin[0][target_plugin_configuration][display_settings][widget_style]"]' => [
-              'value' => 'map'
-            ]
-          ],
-          'or',
-          [
-            ':input[name="plugin[0][target_plugin_configuration][display_settings][map_enabled]"]' => [
-              'checked' => TRUE
-            ]
-          ]
-        ]
-      ]
-    ];
-    
-    $form['map_settings']['map_enabled'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Enable map'),
-      '#default_value' => $this->configuration['map_enabled'],
-      '#description' => $this->t('Show map with ParcelShop locations.')
-    ];
-    
-    $form['map_settings']['map_provider'] = [
-      '#type' => 'select',
-      '#title' => $this->t('Map provider'),
-      '#options' => [
-        'google' => $this->t('Google Maps'),
-        'openstreetmap' => $this->t('OpenStreetMap'),
-        'leaflet' => $this->t('Leaflet')
-      ],
-      '#default_value' => $this->configuration['map_provider'],
-      '#states' => [
-        'visible' => [
-          ':input[name="plugin[0][target_plugin_configuration][map_settings][map_enabled]"]' => [
-            'checked' => TRUE
-          ]
-        ]
-      ]
-    ];
-    
-    $form['map_settings']['map_api_key'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Map API Key'),
-      '#default_value' => $this->configuration['map_api_key'],
-      '#description' => $this->t('API key for the map provider (if required).'),
-      '#states' => [
-        'visible' => [
-          [
-            ':input[name="plugin[0][target_plugin_configuration][map_settings][map_enabled]"]' => [
-              'checked' => TRUE
-            ]
-          ],
-          [
-            ':input[name="plugin[0][target_plugin_configuration][map_settings][map_provider]"]' => [
-              'value' => 'google'
-            ]
-          ]
-        ]
-      ]
     ];
     
     $form['pricing'] = [
@@ -339,11 +270,6 @@ class DpdParcelshop extends ShippingMethodBase {
       $this->configuration['show_distance'] = !empty($values['display_settings']['show_distance']);
       $this->configuration['widget_style'] = $values['display_settings']['widget_style'];
       $this->configuration['auto_select_nearest'] = !empty($values['display_settings']['auto_select_nearest']);
-      
-      // Map settings
-      $this->configuration['map_enabled'] = !empty($values['map_settings']['map_enabled']);
-      $this->configuration['map_provider'] = $values['map_settings']['map_provider'];
-      $this->configuration['map_api_key'] = $values['map_settings']['map_api_key'] ?? '';
       
       // Pricing
       $this->configuration['parcelshop_fee'] = $values['pricing']['parcelshop_fee']['number'] ?? '4.90';
