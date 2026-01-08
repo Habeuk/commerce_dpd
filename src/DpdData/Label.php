@@ -2,10 +2,12 @@
 
 namespace Drupal\commerce_dpd\DpdData;
 
+use Drupal\commerce_dpd\DpdHelper\BaseData;
+
 /**
  * Represents a DPD shipping label.
  */
-class Label {
+class Label extends BaseData {
   protected string $trackingNumber;
   protected string $shipmentId;
   protected string $parcelLabelNumber;
@@ -73,7 +75,8 @@ class Label {
     ];
   }
   
-  public static function createFromResponse(array $api_response): self {
+  public static function createFromResponse(array|object $api_response): self {
+    $api_response = self::normalizeStdClassToArray($api_response);
     // Transforme la réponse API en objet Label
     $data = [
       'tracking_number' => self::extractTrackingNumber($api_response),

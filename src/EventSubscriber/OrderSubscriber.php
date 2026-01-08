@@ -6,6 +6,12 @@ use Drupal\state_machine\Event\WorkflowTransitionEvent;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Drupal\Core\Queue\QueueFactory;
 
+/**
+ * Permet d'ajouter la commande au QueueWorker afin que l'etiquette soit generé.
+ *
+ * @author stephane
+ *        
+ */
 class OrderSubscriber implements EventSubscriberInterface {
   protected QueueFactory $queueFactory;
   

@@ -2,6 +2,8 @@
 
 namespace Drupal\commerce_dpd\ApiClient;
 
+use Drupal\commerce_dpd\DpdData\Label;
+
 /**
  * Interface for DPD SOAP API client.
  *
@@ -48,7 +50,7 @@ interface DpdApiClientInterface {
    * @throws \SoapFault Thrown when a SOAP communication error occurs.
    * @throws \Throwable Thrown when authentication or unexpected errors occur.
    */
-  public function storeOrders(array $orders): array;
+  public function storeOrders(array $orders): Label;
   
   /**
    * Retrieves a list of available DPD Pickup ParcelShops or Pickup Stations.

@@ -126,3 +126,20 @@ commerce_dpd.resend_notification:
         type: entity:commerce_order
       shipment_id:
         type: integer
+
+commerce_dpd.generate_label_button:
+  path: '/admin/commerce/orders/{commerce_order}/dpd-label-button'
+  defaults:
+    _controller: '\Drupal\commerce_dpd\Controller\DpdQueueController::generateLabelButton'
+    _title: 'DPD Label'
+  requirements:
+    _permission: 'administer commerce_order'
+
+commerce_dpd.generate_label_now:
+  path: '/admin/commerce/orders/{commerce_order}/generate-dpd-label-now'
+  defaults:
+    _controller: '\Drupal\commerce_dpd\Controller\DpdQueueController::generateLabelNow'
+    _title: 'Generate DPD Label'
+  requirements:
+    _permission: 'administer commerce_order'
+

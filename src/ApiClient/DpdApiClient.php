@@ -4,7 +4,10 @@ namespace Drupal\commerce_dpd\ApiClient;
 
 use Drupal\commerce_dpd\Service\DpdAuthTokenManagerInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
-use Drupal\commerce_dpd\DpdData\ParcelShop;
+use Drupal\commerce_dpd\DpdData\ {
+  ParcelShop,
+  Label
+};
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Contracts\Cache\ItemInterface;
 
@@ -163,7 +166,7 @@ final class DpdApiClient implements DpdApiClientInterface {
   public function storeOrders(array $orders, array $print_option = [
     'outputFormat' => 'PDF',
     'paperFormat' => 'A6'
-  ]): object {
+  ]): Label {
     $payload = [
       'printOptions' => [
         'printOption' => [
@@ -172,27 +175,36 @@ final class DpdApiClient implements DpdApiClientInterface {
       ],
       'order' => $this->normalizeIso88591($orders)
     ];
-    
-    try {
-      return $this->getShipmentClient()->storeOrders($payload);
-    }
-    catch (\SoapFault $e) {
-      if ($this->isAuthExpiredFault($e)) {
-        $this->tokenManager->clear();
-        return $this->getShipmentClient()->storeOrders($payload);
-      }
-      $this->logger->error('DPD ShipmentService error: @msg', [
-        '@msg' => $e->getMessage()
-      ]);
-      throw $e;
-    }
-    catch (\Throwable $e) {
-      $this->logger->error('DPD ShipmentService ERROR (@code): @message', [
-        '@code' => $e->getCode() ?? 'UNKNOWN',
-        '@message' => $e->getMessage()
-      ]);
-      throw $e;
-    }
+    $cacheKey = $this->getCacheKey($orders);
+    $response = $this->cache->get($cacheKey,
+      function (ItemInterface $item) use ($payload) {
+        // Cache 1:30.
+        $item->expiresAfter(90);
+        try {
+          return $this->getShipmentClient()->storeOrders($payload);
+        }
+        catch (\SoapFault $e) {
+          if ($this->isAuthExpiredFault($e)) {
+            $this->tokenManager->clear();
+            return $this->getShipmentClient()->storeOrders($payload);
+          }
+          $this->logger->error('DPD ShipmentService error: @msg', [
+            '@msg' => $e->getMessage()
+          ]);
+          $item->expiresAfter(60);
+          throw $e;
+        }
+        catch (\Throwable $e) {
+          $this->logger->error('DPD ShipmentService ERROR (@code): @message', [
+            '@code' => $e->getCode() ?? 'UNKNOWN',
+            '@message' => $e->getMessage()
+          ]);
+          $item->expiresAfter(0);
+          throw $e;
+        }
+      });
+    \Stephane888\Debug\debugLog::symfonyDebug($response, 'storeOrders', true);
+    return Label::createFromResponse($response);
   }
   
   /**

@@ -1,4 +1,7 @@
 <?php
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\commerce_order\Entity\OrderInterface;
+use Drupal\Core\Url;
 
 /**
  *
@@ -6,7 +9,7 @@
  * Primary module hooks for commerce_dpd module.
  */
 
-// On verra si n integre ce champs ou pas.
+// On verra si on integre ce champs ou pas.
 
 // function commerce_dpd_update_8001() {
 // $schema = \Drupal::database()->schema();
@@ -26,6 +29,33 @@
 // ]);
 // }
 // }
+function commerce_dpd_entity_operation(EntityInterface $entity) {
+  $operations = [];
+  // Only for placed orders.
+  if ($entity instanceof OrderInterface && $entity->getState()->getId() === 'placed') {
+    // Check if it's a DPD order.
+    $is_dpd_order = FALSE;
+    if ($entity->hasField('shipments') && !$entity->get('shipments')->isEmpty()) {
+      foreach ($entity->get('shipments')->referencedEntities() as $shipment) {
+        $shipping_method = $shipment->getShippingMethod();
+        if ($shipping_method && strpos($shipping_method->getPlugin()->getPluginId(), 'dpd') !== FALSE) {
+          $is_dpd_order = TRUE;
+          break;
+        }
+      }
+    }
+    if ($is_dpd_order) {
+      $operations['generate_dpd_label'] = [
+        'title' => t('Generate DPD Label'),
+        'url' => Url::fromRoute('commerce_dpd.generate_label_now', [
+          'commerce_order' => $entity->id()
+        ]),
+        'weight' => 10
+      ];
+    }
+  }
+  return $operations;
+}
 
 /**
  * Implements hook_theme().
