@@ -8,9 +8,9 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\commerce_dpd\ApiClient\DpdApiClientInterface;
+use Drupal\Core\Logger\LoggerChannel;
 use Drupal\commerce_checkout\Plugin\Commerce\CheckoutFlow\CheckoutFlowInterface;
 use Drupal\profile\Entity\ProfileInterface;
-use Drupal\Core\Render\Markup;
 use Drupal\Core\Template\Attribute;
 
 /**
@@ -26,25 +26,29 @@ use Drupal\Core\Template\Attribute;
 final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFactoryPluginInterface {
   
   use AjaxFormTrait;
-  
-  /**
-   *
-   * @var \Drupal\commerce_dpd\ApiClient\DpdApiClient
-   */
-  protected $dpdApiClient;
+  protected DpdApiClientInterface $dpdApiClient;
+  protected LoggerChannel $logger;
   
   public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition, ?CheckoutFlowInterface $checkout_flow = NULL) {
     $instance = parent::create($container, $configuration, $plugin_id, $plugin_definition, $checkout_flow);
     $instance->dpdApiClient = $container->get('commerce_dpd.api_client');
+    $loggerFactory = $container->get('logger.factory');
+    $instance->logger = $loggerFactory->get('commerce_dpd');
     return $instance;
   }
   
   /**
+   * Ce champs est visible si le shipping est aussi visible.
    *
    * {@inheritdoc}
    */
   public function isVisible() {
-    return $this->isDpdParcelShopSelected();
+    /**
+     *
+     * @var \Drupal\commerce_shipping\Plugin\Commerce\CheckoutPane\ShippingInformation $shipping_information
+     */
+    $shipping_information = $this->checkoutFlow->getPane('shipping_information');
+    return $shipping_information->isVisible();
   }
   
   /**
@@ -56,13 +60,59 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
     $pane_form['#wrapper_id'] = 'dpd-parcelshop-wrapper';
     $pane_form['#prefix'] = '<div id="' . $pane_form['#wrapper_id'] . '">';
     $pane_form['#suffix'] = '</div>';
-    
     // Rafraîchir si on change de méthode de livraison
     $pane_form['#after_build'][] = [
       static::class,
       'attachAjaxRefresh'
     ];
-    
+    if ($this->isDpdParcelShopSelected() || $this->hasDpdRateSelected($complete_form)) {
+      $this->buildMapForm($pane_form, $form_state);
+    }
+    else {
+      $this->buildWaitingForm($pane_form, $form_state);
+    }
+    return $pane_form;
+  }
+  
+  /**
+   * Construit le formulaire d'attente.
+   * Ce cas est theoriquement possible, il s'agit du cat ou le methode de
+   * livraison est dpd_parcel mais le hasDpdRateSelected n'a pas pu recuperer la
+   * valeur ( cela se produit si DPD est construit avant le shipping)
+   */
+  private function buildWaitingForm(array &$pane_form, FormStateInterface $form_state) {
+    $pane_form['message'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => 'dpd-waiting-message',
+        'class' => [
+          'dpd-waiting-message'
+        ]
+      ],
+      'content' => [
+        '#markup' => $this->t('Select "DPD ParcelShop" shipping method to choose a pickup point.')
+      ]
+    ];
+    // Ajouter un conteneur vide pour la future carte
+    $pane_form['container'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => 'dpd-parcelshop-container',
+        'class' => [
+          'dpd-parcelshop-container'
+        ],
+        'style' => 'display: none;'
+      ]
+    ];
+    // @todo ce code n'est pas complet, il faudra trouver le moyen de recherche
+    // le pane DpdParcelShopPane.
+    $pane_form['#attached']['library'][] = 'commerce_dpd/dpd_watcher';
+  }
+  
+  /**
+   * Construit le formulaire avec la carte (quand DPD est sélectionné)
+   */
+  private function buildMapForm(array &$pane_form, FormStateInterface $form_state) {
     $shops = [];
     $map_data = [];
     $profile = $this->getShippingProfile($form_state);
@@ -103,7 +153,7 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
         }
       }
       catch (\Throwable $e) {
-        \Drupal::logger('commerce_dpd')->error('DPD Commerce PANE ParcelShopFinder ERROR (@code): @message', [
+        $this->logger->error('DPD Commerce PANE ParcelShopFinder ERROR (@code): @message', [
           '@code' => $e->getCode() ?? 'UNKNOWN',
           '@message' => $e->getMessage()
         ]);
@@ -192,8 +242,6 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
         'data-map-control' => 'data-store'
       ]
     ];
-    
-    return $pane_form;
   }
   
   /**
@@ -226,7 +274,6 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
    */
   private function buildOptions(array $shops): array {
     $options = [];
-    $renderer = \Drupal::service('renderer');
     foreach ($shops as $shop) {
       /**
        *
@@ -236,8 +283,7 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
       if (!$id) {
         continue;
       }
-      // Rendre le template Twig
-      $template = [
+      $options[$id] = [
         '#theme' => 'dpd_parcelshop_option',
         '#id' => $id,
         '#company' => $shop->getCompany() ?? '',
@@ -252,8 +298,6 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
           ]
         ])
       ];
-      $rendered = $renderer->render($template);
-      $options[$id] = Markup::create((string) $rendered);
     }
     return $options;
   }
@@ -266,13 +310,27 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
     // Check opening hours for today
     if ($shop->isOpenToday()) {
       $info[] = [
-        '#markup' => '<span class="open-today">' . $this->t('Open today') . '</span>'
+        '#type' => 'html_tag',
+        '#tag' => 'span',
+        '#value' => $this->t('Open today'),
+        '#attributes' => [
+          'class' => [
+            'open-today'
+          ]
+        ]
       ];
     }
     // Check for specific services
     if ($shop->hasService('express')) {
       $info[] = [
-        '#markup' => '<span class="express-service">' . $this->t('Express pickup') . '</span>'
+        '#type' => 'html_tag',
+        '#tag' => 'span',
+        '#value' => $this->t('Express pickup'),
+        '#attributes' => [
+          'class' => [
+            'express-service'
+          ]
+        ]
       ];
     }
     return $info;
@@ -326,7 +384,7 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
   
   public function buildPaneSummary() {
     $summary = [];
-    if ($this->isVisible()) {
+    if ($this->isDpdParcelShopSelected()) {
       $dpd_parcelshop_data = $this->order->getData('dpd_parcelshop_data');
       if (!empty($dpd_parcelshop_data['name'])) {
         $summary[] = [
@@ -368,11 +426,62 @@ final class DpdParcelShopPane extends CheckoutPaneBase implements ContainerFacto
    * Attach AJAX refresh
    */
   public static function attachAjaxRefresh(array $element, FormStateInterface $form_state) {
+    \Stephane888\Debug\debugLog::kintDebugDrupal($element, 'attachAjaxRefresh', true);
     return $element;
   }
   
+  /**
+   * Vérifie si DPD ParcelShop est la méthode de livraison sélectionnée
+   */
   private function isDpdParcelShopSelected(): bool {
-    return TRUE;
+    if (!$this->order->hasField('shipments') || $this->order->get('shipments')->isEmpty()) {
+      return false;
+    }
+    foreach ($this->order->get('shipments')->referencedEntities() as $shipment) {
+      if (!$shipment->hasField('shipping_method') || $shipment->get('shipping_method')->isEmpty()) {
+        continue;
+      }
+      $shipping_method = $shipment->get('shipping_method')->first();
+      if (!$shipping_method) {
+        continue;
+      }
+      /**
+       *
+       * @var \Drupal\commerce_shipping\Entity\ShippingMethod $commerce_shipping_method
+       */
+      $commerce_shipping_method = $shipping_method->entity;
+      $shipping_method_id = $commerce_shipping_method?->getPlugin()->getPluginId();
+      if (strpos($shipping_method_id, 'dpd_parcelshop') !== false) {
+        return true;
+      }
+    }
+    return false;
+  }
+  
+  /**
+   * Verifie le rendu html.
+   *
+   * @param array $complete_form
+   * @return bool
+   */
+  private function hasDpdRateSelected(array $complete_form): bool {
+    /**
+     *
+     * @var \Drupal\commerce_shipping\Entity\Shipment $commerce_shipment
+     */
+    $commerce_shipment = $complete_form['shipping_information']['shipments'][0]['#shipment'] ?? null;
+    if ($commerce_shipment) {
+      /**
+       *
+       * @var \Drupal\commerce_shipping\Entity\ShippingMethod $commerce_shipping_method
+       */
+      $commerce_shipping_method = $commerce_shipment->getShippingMethod();
+      $shipping_method_id = $commerce_shipping_method?->getPlugin()->getPluginId();
+      if (strpos($shipping_method_id, 'dpd_parcelshop') !== false) {
+        return true;
+      }
+    }
+    return false;
   }
   
   protected function hasValidAddress(ProfileInterface $profile): bool {

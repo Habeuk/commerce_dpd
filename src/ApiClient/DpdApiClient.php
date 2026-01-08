@@ -204,11 +204,11 @@ final class DpdApiClient implements DpdApiClientInterface {
       ]
     ];
     $payload = $this->normalizeIso88591($request);
-    $cacheKey = $this->getCacheKey($payload);
+    $cacheKey = $this->getCacheKey($criteria);
     $response = $this->cache->get($cacheKey,
       function (ItemInterface $item) use ($payload) {
-        // Cache 30 minutes.
-        $item->expiresAfter(1800);
+        // Cache 5 minutes.
+        $item->expiresAfter(300);
         try {
           return $this->getParcelShopClient()->findParcelShops($payload);
         }
@@ -217,11 +217,10 @@ final class DpdApiClient implements DpdApiClientInterface {
             $this->tokenManager->clear();
             return $this->getParcelShopClient()->findParcelShops($payload);
           }
-          \Stephane888\Debug\debugLog::symfonyDebug($e, 'findParcelShops__error', true);
           $this->logger->error('DPD ParcelShopFinder error: @msg', [
             '@msg' => $e->getMessage()
           ]);
-          $item->expiresAfter(200);
+          $item->expiresAfter(120);
           throw $e;
         }
         catch (\Throwable $e) {

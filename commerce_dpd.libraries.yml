@@ -12,3 +12,10 @@ openstreetmap:
     - core/drupal
     - core/drupalSettings
     - core/once
+
+dpd_watcher:
+  version: 1.x
+  js:
+    js/dpd_watcher.js: {}
+  dependencies: 
+    - core/drupal
