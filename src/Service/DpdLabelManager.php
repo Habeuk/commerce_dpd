@@ -5,18 +5,16 @@ namespace Drupal\commerce_dpd\Service;
 use Drupal\commerce_shipping\Entity\ShipmentInterface;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_dpd\DpdData\Label;
-use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Drupal\Core\Logger\LoggerChannel;
 
 /**
  * Manages DPD labels for shipments and orders.
  */
 class DpdLabelManager {
   private DpdLabelService $labelService;
-  private LoggerChannelFactoryInterface $logger;
   
-  public function __construct(DpdLabelService $label_service, LoggerChannelFactoryInterface $logger_factory) {
+  public function __construct(DpdLabelService $label_service, private readonly LoggerChannel $logger) {
     $this->labelService = $label_service;
-    $this->logger = $logger_factory->get('commerce_dpd');
   }
   
   /**
@@ -58,7 +56,7 @@ class DpdLabelManager {
    */
   public function attachLabelToShipment(ShipmentInterface $shipment, Label $label): void {
     // Store label data
-    $shipment->set('dpd_label_data', serialize($label->toArray()));
+    $shipment->setData('dpd_label_data', $label->toArray());
     
     // Set tracking code
     $shipment->setTrackingCode($label->getTrackingNumber());
@@ -73,18 +71,10 @@ class DpdLabelManager {
    * Gets label from shipment.
    */
   public function getLabelFromShipment(ShipmentInterface $shipment): ?Label {
-    $label_data = $shipment->get('dpd_label_data')->value;
-    
-    if (!$label_data) {
-      return null;
-    }
-    
-    $data = unserialize($label_data);
-    
+    $data = $shipment->getData('dpd_label_data');
     if (empty($data['tracking_number'])) {
       return null;
     }
-    
     return new Label($data);
   }
   

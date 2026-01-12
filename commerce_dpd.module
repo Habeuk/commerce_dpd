@@ -32,7 +32,7 @@ use Drupal\Core\Url;
 function commerce_dpd_entity_operation(EntityInterface $entity) {
   $operations = [];
   // Only for placed orders.
-  if ($entity instanceof OrderInterface && $entity->getState()->getId() === 'placed') {
+  if ($entity instanceof OrderInterface && $entity->getState()->getId() === 'validation') {
     // Check if it's a DPD order.
     $is_dpd_order = FALSE;
     if ($entity->hasField('shipments') && !$entity->get('shipments')->isEmpty()) {

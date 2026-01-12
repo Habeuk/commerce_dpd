@@ -10,13 +10,13 @@ services:
     arguments:
       - '@config.factory'
       - '@keyvalue'
-      - '@logger.factory'
+      - '@logger.channel.commerce_dpd'
       - '@datetime.time'
 
   commerce_dpd.api_client:
     class: Drupal\commerce_dpd\ApiClient\DpdApiClient
     arguments:
-      - '@logger.factory'
+      - '@logger.channel.commerce_dpd'
       - '@commerce_dpd.auth_token_manager'
       - '@commerce_dpd.cache.parcelshop'
 
@@ -29,8 +29,13 @@ services:
 
   commerce_dpd.label_service:
     class: Drupal\commerce_dpd\Service\DpdLabelService
-    arguments: ['@commerce_dpd.api_client', '@logger.factory', '@config.factory']
+    arguments: ['@commerce_dpd.api_client', '@logger.channel.commerce_dpd', '@config.factory']
 
   commerce_dpd.label_manager:
     class: Drupal\commerce_dpd\Service\DpdLabelManager
-    arguments: ['@commerce_dpd.label_service', '@logger.factory']
+    arguments: ['@commerce_dpd.label_service', '@logger.channel.commerce_dpd']
+  
+  logger.channel.commerce_dpd:
+    class: Drupal\Core\Logger\LoggerChannel
+    factory: logger.factory:get
+    arguments: ['commerce_dpd']

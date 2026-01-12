@@ -3,7 +3,7 @@
 namespace Drupal\commerce_dpd\ApiClient;
 
 use Drupal\commerce_dpd\Service\DpdAuthTokenManagerInterface;
-use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Drupal\Core\Logger\LoggerChannel;
 use Drupal\commerce_dpd\DpdData\ {
   ParcelShop,
   Label
@@ -19,10 +19,8 @@ final class DpdApiClient implements DpdApiClientInterface {
   protected \SoapClient $parcelShopClient;
   protected \SoapClient $client;
   protected DpdAuthTokenManagerInterface $tokenManager;
-  protected $logger;
   
-  public function __construct(LoggerChannelFactoryInterface $logger_factory, DpdAuthTokenManagerInterface $token_manager, private readonly FilesystemAdapter $cache) {
-    $this->logger = $logger_factory->get('commerce_dpd');
+  public function __construct(private readonly LoggerChannel $logger, DpdAuthTokenManagerInterface $token_manager, private readonly FilesystemAdapter $cache) {
     $this->tokenManager = $token_manager;
   }
   
@@ -175,11 +173,13 @@ final class DpdApiClient implements DpdApiClientInterface {
       ],
       'order' => $this->normalizeIso88591($orders)
     ];
+    \Stephane888\Debug\debugLog::symfonyDebug($payload, 'storeOrders__payload', true);
     $cacheKey = $this->getCacheKey($orders);
     $response = $this->cache->get($cacheKey,
       function (ItemInterface $item) use ($payload) {
-        // Cache 1:30.
-        $item->expiresAfter(90);
+        // Cache 12 jours// pour eviter de generer plusieurs fois une etiquete
+        // pour la meme commande.
+        $item->expiresAfter(1036800);
         try {
           return $this->getShipmentClient()->storeOrders($payload);
         }
@@ -203,8 +203,15 @@ final class DpdApiClient implements DpdApiClientInterface {
           throw $e;
         }
       });
-    \Stephane888\Debug\debugLog::symfonyDebug($response, 'storeOrders', true);
-    return Label::createFromResponse($response);
+    \Stephane888\Debug\debugLog::symfonyDebug($response, 'storeOrders__response', true);
+    if (empty($response['shipmentResponses'])) {
+      throw new \RuntimeException('DPD returned no shipment response.');
+    }
+    // $shipment_response = $response['shipmentResponses'][0];
+    // // 3. Create Label object
+    // $label = Label::createFromResponse($shipment_response);
+    // return Label::createFromResponse($response);
+    return $response;
   }
   
   /**

@@ -15,7 +15,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
  * @QueueWorker(
  *   id = "commerce_dpd_label_generation",
  *   title = @Translation("DPD Label Generator"),
- *   cron = {"time" = 90}
+ *   cron = {"time" = 30}
  * )
  */
 class DpdLabelGenerator extends QueueWorkerBase implements ContainerFactoryPluginInterface {
@@ -66,7 +66,7 @@ class DpdLabelGenerator extends QueueWorkerBase implements ContainerFactoryPlugi
     try {
       // 3. Vérifier si c'est une commande DPD
       if (!$this->isDpdOrder($order)) {
-        $logger->info('Order @id is not a DPD order, skipping.', [
+        $logger->warning('Order @id is not a DPD order, skipping.', [
           '@id' => $order_id
         ]);
         return;
@@ -74,7 +74,7 @@ class DpdLabelGenerator extends QueueWorkerBase implements ContainerFactoryPlugi
       
       // 4. Vérifier si les étiquettes ont déjà été générées
       if ($this->hasLabelsAlready($order)) {
-        $logger->info('Order @id already has DPD labels, skipping.', [
+        $logger->warning('Order @id already has DPD labels, skipping.', [
           '@id' => $order_id
         ]);
         return;
@@ -97,7 +97,7 @@ class DpdLabelGenerator extends QueueWorkerBase implements ContainerFactoryPlugi
         }
         else {
           $failure_count++;
-          $logger->error('Failed to generate DPD label for shipment @shipment: @error', [
+          $logger->error('QueueWorker : Failed to generate DPD label for shipment @shipment: @error', [
             '@shipment' => $result['shipment']->id(),
             '@error' => $result['error']
           ]);
@@ -124,12 +124,12 @@ class DpdLabelGenerator extends QueueWorkerBase implements ContainerFactoryPlugi
       }
       
       // Réessayer jusqu'à 3 fois max
-      if ($data['retry_count'] <= 3) {
+      if ($data['retry_count'] <= 2) {
         // Re-mettre dans la queue pour réessai
         $queue = \Drupal::queue('commerce_dpd_label_generation');
         $queue->createItem($data);
         
-        $logger->warning('Re-queuing order @id for retry (@retry/3)', [
+        $logger->warning('Re-queuing order @id for retry (@retry/2)', [
           '@id' => $order_id,
           '@retry' => $data['retry_count']
         ]);
@@ -142,14 +142,12 @@ class DpdLabelGenerator extends QueueWorkerBase implements ContainerFactoryPlugi
    */
   private function isDpdOrder($order): bool {
     $shipments = $order->get('shipments')->referencedEntities();
-    
     foreach ($shipments as $shipment) {
       $shipping_method = $shipment->getShippingMethod();
-      if ($shipping_method && strpos($shipping_method->getPlugin()->getPluginId(), 'dpd') !== false) {
+      if ($shipping_method && strpos($shipping_method->getPlugin()->getPluginId(), 'dpd_') !== false) {
         return true;
       }
     }
-    
     return false;
   }
   
@@ -158,13 +156,11 @@ class DpdLabelGenerator extends QueueWorkerBase implements ContainerFactoryPlugi
    */
   private function hasLabelsAlready($order): bool {
     $shipments = $order->get('shipments')->referencedEntities();
-    
     foreach ($shipments as $shipment) {
       if ($this->labelManager->hasLabel($shipment)) {
         return true;
       }
     }
-    
     return false;
   }
   

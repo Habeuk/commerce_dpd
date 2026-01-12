@@ -9,6 +9,7 @@ use Drupal\Core\Queue\QueueWorkerManagerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\Core\Url;
 use Symfony\Component\HttpFoundation\RedirectResponse;
+use Drupal\commerce_dpd\Service\DpdLabelManager;
 
 /**
  * Controller for DPD queue operations.
@@ -37,7 +38,7 @@ class DpdQueueController extends ControllerBase {
    * @param \Drupal\Core\Queue\QueueWorkerManagerInterface $queue_worker_manager
    *        The queue worker manager.
    */
-  public function __construct(QueueFactory $queue_factory, QueueWorkerManagerInterface $queue_worker_manager) {
+  public function __construct(QueueFactory $queue_factory, QueueWorkerManagerInterface $queue_worker_manager, private DpdLabelManager $label_manager) {
     $this->queueFactory = $queue_factory;
     $this->queueWorkerManager = $queue_worker_manager;
   }
@@ -47,7 +48,7 @@ class DpdQueueController extends ControllerBase {
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container) {
-    return new static($container->get('queue'), $container->get('plugin.manager.queue_worker'));
+    return new static($container->get('queue'), $container->get('plugin.manager.queue_worker'), $container->get('commerce_dpd.label_manager'));
   }
   
   /**
@@ -86,56 +87,24 @@ class DpdQueueController extends ControllerBase {
   }
   
   /**
-   * Generate DPD label immediately.
+   * Queue DPD label generation (respects API rate limits).
    */
   public function generateLabelNow(OrderInterface $commerce_order) {
+    // 1. Vérifier si étiquettes existent déjà
+    if ($this->hasDpdLabels($commerce_order)) {
+      $this->messenger()->addWarning($this->t('DPD labels already exist for this order.'));
+      return $this->redirectToOrder($commerce_order);
+    }
+    // 2. Ajouter à la queue
     $queue = $this->queueFactory->get('commerce_dpd_label_generation');
-    
-    // Add to queue
-    $queue_item_id = $queue->createItem([
+    $queue->createItem([
       'order_id' => $commerce_order->id(),
-      'manual' => TRUE,
+      'manual' => true,
       'timestamp' => time(),
       'user_id' => $this->currentUser()->id()
     ]);
-    
-    // Process immediately
-    $this->processQueueItem($commerce_order->id());
-    
-    $this->messenger()->addStatus($this->t('DPD label generation initiated for order @order.', [
-      '@order' => $commerce_order->getOrderNumber()
-    ]));
-    
-    return new RedirectResponse(Url::fromRoute('entity.commerce_order.canonical', [
-      'commerce_order' => $commerce_order->id()
-    ])->toString());
-  }
-  
-  /**
-   * Process a specific queue item immediately.
-   */
-  protected function processQueueItem($order_id) {
-    $queue = $this->queueFactory->get('commerce_dpd_label_generation');
-    
-    try {
-      $worker = $this->queueWorkerManager->createInstance('commerce_dpd_label_generation');
-      
-      // Find and process the specific item
-      $items = $queue->claimItems(10); // Get up to 10 items
-      foreach ($items as $item) {
-        if ($item->data['order_id'] == $order_id) {
-          $worker->processItem($item->data);
-          $queue->deleteItem($item);
-          break;
-        }
-        $queue->releaseItem($item); // Release other items
-      }
-    }
-    catch (\Exception $e) {
-      $this->logger('commerce_dpd')->error('Error processing DPD label queue: @error', [
-        '@error' => $e->getMessage()
-      ]);
-    }
+    $this->messenger()->addStatus($this->t('DPD label generation has been queued and will be processed shortly.'));
+    return $this->redirectToOrder($commerce_order);
   }
   
   /**
@@ -145,13 +114,24 @@ class DpdQueueController extends ControllerBase {
     if (!$order->hasField('shipments') || $order->get('shipments')->isEmpty()) {
       return FALSE;
     }
-    
     foreach ($order->get('shipments')->referencedEntities() as $shipment) {
-      if ($shipment->get('dpd_label_data')->value) {
+      /**
+       *
+       * @var \Drupal\commerce_shipping\Entity\Shipment $shipment
+       */
+      if ($this->label_manager->hasLabel($shipment)) {
         return TRUE;
       }
     }
-    
     return FALSE;
+  }
+  
+  /**
+   * Helper to redirect to order page.
+   */
+  protected function redirectToOrder(OrderInterface $order): RedirectResponse {
+    return new RedirectResponse(Url::fromRoute('entity.commerce_order.canonical', [
+      'commerce_order' => $order->id()
+    ])->toString());
   }
 }

@@ -4,7 +4,7 @@ namespace Drupal\commerce_dpd\Service;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\KeyValueStore\KeyValueFactoryInterface;
-use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Drupal\Core\Logger\LoggerChannel;
 use Drupal\Component\Datetime\TimeInterface;
 
 /**
@@ -28,12 +28,10 @@ final class DpdAuthTokenManager implements DpdAuthTokenManagerInterface {
   private const RESET_MINUTE = 1;
   protected $config;
   protected $store;
-  protected $logger;
   
-  public function __construct(ConfigFactoryInterface $config_factory, KeyValueFactoryInterface $key_value_factory, LoggerChannelFactoryInterface $logger_factory, private TimeInterface $time) {
+  public function __construct(ConfigFactoryInterface $config_factory, KeyValueFactoryInterface $key_value_factory, private readonly LoggerChannel $logger, private TimeInterface $time) {
     $this->config = $config_factory->get('commerce_dpd.settings');
     $this->store = $key_value_factory->get('commerce_dpd');
-    $this->logger = $logger_factory->get('commerce_dpd');
   }
   
   /**

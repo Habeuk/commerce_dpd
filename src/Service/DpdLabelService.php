@@ -5,7 +5,7 @@ namespace Drupal\commerce_dpd\Service;
 use Drupal\commerce_shipping\Entity\ShipmentInterface;
 use Drupal\commerce_dpd\ApiClient\DpdApiClientInterface;
 use Drupal\commerce_dpd\DpdData\Label;
-use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Drupal\Core\Logger\LoggerChannel;
 use Drupal\Core\Config\ConfigFactoryInterface;
 
 /**
@@ -13,12 +13,10 @@ use Drupal\Core\Config\ConfigFactoryInterface;
  */
 class DpdLabelService {
   private DpdApiClientInterface $dpdApiClient;
-  private LoggerChannelFactoryInterface $loggerFactory;
   private ConfigFactoryInterface $configFactory;
   
-  public function __construct(DpdApiClientInterface $dpd_api_client, LoggerChannelFactoryInterface $logger_factory, ConfigFactoryInterface $config_factory) {
+  public function __construct(DpdApiClientInterface $dpd_api_client, private readonly LoggerChannel $logger, ConfigFactoryInterface $config_factory) {
     $this->dpdApiClient = $dpd_api_client;
-    $this->loggerFactory = $logger_factory;
     $this->configFactory = $config_factory;
   }
   
@@ -30,23 +28,14 @@ class DpdLabelService {
     
     // 1. Build DPD order structure
     $dpd_order = $this->buildDpdOrder($shipment);
-    
+    \Stephane888\Debug\debugLog::symfonyDebug($dpd_order, 'generateLabel__dpd_order', true);
     // 2. Call storeOrders API
-    $response = $this->dpdApiClient->storeOrders([
+    $label = $this->dpdApiClient->storeOrders([
       $dpd_order
     ]);
     
-    if (empty($response['shipmentResponses'])) {
-      throw new \RuntimeException('DPD returned no shipment response.');
-    }
-    
-    $shipment_response = $response['shipmentResponses'][0];
-    
-    // 3. Create Label object
-    $label = Label::createFromResponse($shipment_response);
-    
     // 4. Log success
-    $this->loggerFactory->get('commerce_dpd')->info('DPD label generated for order @order. Tracking: @tracking', [
+    $this->logger->info('DPD label generated for order @order. Tracking: @tracking', [
       '@order' => $order->getOrderNumber(),
       '@tracking' => $label->getTrackingNumber()
     ]);
@@ -75,11 +64,13 @@ class DpdLabelService {
     
     // Add ParcelShop specific data
     if ($this->isParcelShopOrder($order)) {
+      // @todo parcelShopNotification et productAndServiceData doivent etre bien
+      // verifier. Ce rassurer que se sont les bonnes valeurs qui partent.
       $dpd_order['productAndServiceData']['parcelShop'] = [
         'parcelShopId' => $order->getData('dpd_parcelshop_data')['pudoId'],
         'parcelShopNotification' => [
-          'channel' => 2, // 1=email, 2=SMS
-          'value' => $shipping_profile->get('phone')->value
+          'channel' => 2 // 1=email, 2=SMS
+                         // 'value' => $shipping_profile->get('phone')->value
         ]
       ];
     }
@@ -129,13 +120,15 @@ class DpdLabelService {
     // For ParcelShop, recipient is the shop itself
     if ($this->isParcelShopOrder($order)) {
       $parcelshop_data = $order->getData('dpd_parcelshop_data');
+      \Stephane888\Debug\debugLog::symfonyDebug($parcelshop_data, 'getRecipientAddress', true);
+      // @todo il faudra completer les informations, y compris dans le pane.
       return [
         'name1' => $parcelshop_data['name'],
         'street' => $this->extractStreet($parcelshop_data['address']),
         'houseNo' => $this->extractHouseNumber($parcelshop_data['address']),
-        'country' => 'FR', // Adjust based on parcelshop country
-        'zipCode' => $parcelshop_data['zip_code'],
-        'city' => $parcelshop_data['city']
+        // 'country' => 'FR',
+        'zipCode' => $parcelshop_data['zip_code']
+        // 'city' => $parcelshop_data['city']
       ];
     }
     
@@ -177,14 +170,15 @@ class DpdLabelService {
     
     // Add notification for ParcelShop
     if ($this->isParcelShopOrder($order)) {
-      $phone = $shipping_profile->get('phone')->value;
-      if ($phone) {
-        $services['notification'] = [
-          'channel' => 2, // SMS
-          'value' => $phone,
-          'language' => 'fr'
-        ];
-      }
+      // @todo, voir si le telephone est necessaire.
+      // $phone = $shipping_profile->get('phone')->value;
+      // if ($phone) {
+      // $services['notification'] = [
+      // 'channel' => 2, // SMS
+      // 'value' => $phone,
+      // 'language' => 'fr'
+      // ];
+      // }
     }
     
     // Add insurance if order value is high
